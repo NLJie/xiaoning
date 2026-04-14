@@ -1,0 +1,311 @@
+{
+  "main": {
+    "id": "37a4ece0ae44376a",
+    "type": "split",
+    "children": [
+      {
+        "id": "1a3db5827ee2ea29",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ba93f62498bb0a3a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "5. 表达/README.md",
+                "mode": "preview",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "033576a6b33dff69",
+    "type": "split",
+    "children": [
+      {
+        "id": "bbba31aed4d15388",
+        "type": "tabs",
+        "dimension": 59.24024640657084,
+        "children": [
+          {
+            "id": "318abbbcd7749f6f",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "cc8540b919f4ee67",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "e2f9ecf537a853a4",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          },
+          {
+            "id": "9b78bc0e4508fc3f",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "7620addf2b434331",
+            "type": "leaf",
+            "state": {
+              "type": "lifeos-pro-create-note",
+              "state": {},
+              "icon": "file-plus",
+              "title": "LifeOS Notes Creation Form"
+            }
+          }
+        ]
+      },
+      {
+        "id": "2f180287557a29a0",
+        "type": "tabs",
+        "dimension": 40.75975359342916,
+        "children": [
+          {
+            "id": "b1f138b5e759a2ed",
+            "type": "leaf",
+            "state": {
+              "type": "lifeos-pro-create-note",
+              "state": {},
+              "icon": "file-plus",
+              "title": "LifeOS Notes Creation Form"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 329.5
+  },
+  "right": {
+    "id": "e909704c2c67d329",
+    "type": "split",
+    "children": [
+      {
+        "id": "8d590967b738185b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "bfe60a9c435028cc",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/交叉编译第三方库.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "交叉编译第三方库 的出链列表"
+            }
+          },
+          {
+            "id": "6d086e2d3fce45ca",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "0. 周期笔记/未命名.base",
+                "followCursor": true,
+                "showSearch": true,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "未命名 的大纲"
+            }
+          },
+          {
+            "id": "fdf26b19b598132b",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "1. 项目/个人品牌-WOT-分享会/往届主题.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "往届主题 的反向链接列表"
+            }
+          },
+          {
+            "id": "14a387d228e8b0a8",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "01f0ca556cb8ae1c",
+            "type": "leaf",
+            "state": {
+              "type": "deep-ask-ai-chat",
+              "state": {},
+              "icon": "brain-circuit",
+              "title": "Deep Ask AI Chat"
+            }
+          },
+          {
+            "id": "5fc9c90a754eb448",
+            "type": "leaf",
+            "state": {
+              "type": "lifeos-pro-task-manager",
+              "state": {},
+              "icon": "circle-check-big",
+              "title": "LifeOS Task Manager"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "horizontal",
+    "width": 356.5,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "bases:新建数据库": false,
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "command-palette:打开命令面板": false,
+      "random-note:开始漫游笔记": false,
+      "workspaces:管理工作区布局": false,
+      "fuzzy-chinese-pinyin:FuzzySearch": false,
+      "lifeos-pro:LifeOS Notes Creation Form": false,
+      "lifeos-pro:LifeOS Big Calendar": false,
+      "lifeos-pro:LifeOS Home": false,
+      "lifeos-pro:LifeOS Task Manager": false,
+      "templater-obsidian:Templater": false,
+      "deep-ask:Deep Ask AI Chat": false,
+      "lifeos-pro:LifeOS Pomodoro Timer": false
+    }
+  },
+  "active": "318abbbcd7749f6f",
+  "lastOpenFiles": [
+    "5. 表达/README.md",
+    "任务.md",
+    "5. 表达/未命名.base",
+    "1. 项目/兆晟_D6P/一、项目基础信息.md",
+    "1. 项目/兆晟_D6P/云台控制开发.md",
+    "1. 项目/兆晟_D6P/兆晟_D6P.README.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/交叉编译第三方库.md",
+    "2. 领域/嵌入式应用开发/嵌入式应用开发.README.md",
+    "2. 领域/嵌入式操作系统开发/嵌入式操作系统开发.README.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.1 音频基础知识.md",
+    "2. 领域/嵌入式应用开发/2. Linux 高级应用编程",
+    "2. 领域/嵌入式应用开发/新建文件夹",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260410100653.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260410101731.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260410101129.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210251.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210806.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409211200.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210231.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210853.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409205650.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/a88a81ad93bc17917a8e0f81b99d9af1.png",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/Linux 多进程 IPC 通信.md",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础",
+    "2. 领域/嵌入式操作系统开发/5. Debian 操作系统",
+    "2. 领域/嵌入式操作系统开发/4. Ubuntu 操作系统 - 副本",
+    "2. 领域/嵌入式操作系统开发/4. Ubuntu 操作系统",
+    "2. 领域/嵌入式操作系统开发/4. Ubuntu、Debian",
+    "2. 领域/嵌入式操作系统开发/新建文件夹",
+    "0. 周期笔记/2026/Daily/04/2026-04-12.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.2 视频基础知识.md",
+    "2. 领域/嵌入式应用开发/1. Linux 应用编程/Linux 多进程 IPC 通信.md",
+    "2. 领域/嵌入式硬件开发/嵌入式硬件开发.README.md",
+    "README.md",
+    "2. 领域/README.md",
+    "-1. 捕获/D6P 云台控制问题修复.md",
+    "主页.canvas",
+    "2. 领域/嵌入式Linux内核开发/嵌入式Linux内核开发.README.md",
+    "0. 周期笔记/2026/Daily/04/2026-04-09.md",
+    "0. 周期笔记/2026/Daily/04/2026-04-08.md",
+    "2. 领域/Template.md",
+    "2. 领域/嵌入式Linux内核/嵌入式Linux内核.README.md",
+    "2. 领域/嵌入式操纵系统/嵌入式操纵系统.README.md",
+    "-1. 捕获/第一次使用LifeOS.md",
+    "1. 项目/README.md",
+    "0. 周期笔记/2026/Daily/04/2026-04-15.md",
+    "1. 项目/个人品牌-LifeOS-录制上手视频/视频教程大纲.canvas",
+    "未命名.canvas",
+    "2. 主题/个人品牌-LifeOS-录制上手视频/视频教程大纲.canvas",
+    "HOME.canvas",
+    "Templates/HOME.canvas",
+    "hello/HOME.canvas",
+    "hello/Templates/HOME.canvas"
+  ]
+}

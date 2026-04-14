@@ -1,0 +1,28 @@
+{
+    "metadata": {
+        "label": "你好，阅读当前文件夹状态",
+        "context": {
+            "openedFiles": [],
+            "openedWebPages": [],
+            "selectedFiles": [],
+            "selectedTags": []
+        }
+    },
+    "messages": [
+        {
+            "id": "1775611073880",
+            "message": "你好，阅读当前文件夹状态",
+            "status": "local"
+        },
+        {
+            "id": "1775611081082",
+            "message": "",
+            "status": "loading"
+        },
+        {
+            "id": "1775611082576",
+            "message": "Error message: Request failed, please try again later: \n429 Request failed, status 429",
+            "status": "ai"
+        }
+    ]
+}
