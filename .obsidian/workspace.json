@@ -4,17 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "1a3db5827ee2ea29",
+        "id": "415945ac14117ebd",
         "type": "tabs",
         "children": [
           {
-            "id": "ba93f62498bb0a3a",
+            "id": "49c1572e0b6a9e7f",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "5. 表达/README.md",
-                "mode": "preview",
+                "file": "-1. 捕获/README.md",
+                "mode": "source",
                 "source": false,
                 "backlinks": true,
                 "backlinkOpts": {
@@ -30,8 +30,57 @@
               "icon": "lucide-file",
               "title": "README"
             }
+          },
+          {
+            "id": "ab307881878d5293",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "-1. 捕获/BSP：device-tree 文件排查底层问题.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "BSP：device-tree 文件排查底层问题"
+            }
+          },
+          {
+            "id": "4da1b07b07d91761",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "1. 项目/兆晟_HM2/VCA（视频内容分析 video content analysis）.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "VCA（视频内容分析 video content analysis）"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -161,13 +210,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "0. 周期笔记/未命名.base",
+                "file": "-1. 捕获/BSP：device-tree 文件排查底层问题.md",
                 "followCursor": true,
                 "showSearch": true,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "未命名 的大纲"
+              "title": "BSP：device-tree 文件排查底层问题 的大纲"
             }
           },
           {
@@ -228,8 +277,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 356.5,
-    "collapsed": true
+    "width": 445.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -251,18 +299,43 @@
       "lifeos-pro:LifeOS Pomodoro Timer": false
     }
   },
-  "active": "318abbbcd7749f6f",
+  "active": "ab307881878d5293",
   "lastOpenFiles": [
+    "1. 项目/兆晟_HM2/VCA（视频内容分析 video content analysis）.md",
+    "1. 项目/兆晟_HM2/基础信息.md",
+    "1. 项目/兆晟_HM2/兆晟_HM2.README.md",
+    "1. 项目/兆晟_蜂群_RK3576/兆晟_蜂群_RK3576.README.md",
+    "-1. 捕获/BSP：device-tree 文件排查底层问题.md",
+    "-1. 捕获/README.md",
+    "1. 项目/兆晟_蜂群_RK3576/MCU Can 接口的使用.md",
+    "1. 项目/兆晟_蜂群_RK3576/RK3576 MCU CAN 接口使用.md",
+    "-1. 捕获/ESP32-S3_微焦相机.md",
+    "-1. 捕获/第一次使用LifeOS.md",
+    "-1. 捕获/D6P 云台控制问题修复.md",
+    "-1. 捕获/未命名.md",
+    "1. 项目/兆晟_D6P/兆晟_D6P.README.md",
+    "1. 项目/兆晟_D6P/一、项目基础信息.md",
+    "1. 项目/README.md",
+    "1. 项目/兆晟_蜂群_RK3576",
+    "1. 项目/兆晟_HM2",
+    "1. 项目/未命名",
+    "Untitled Diagram.svg",
+    "Untitled Diagram 1.svg",
+    "未命名",
+    "1. 项目/兆晟_D6P/123.svg",
+    "1. 项目/兆晟_D6P/123.svg.md",
+    "1. 项目/兆晟_D6P/云台控制开发.md",
+    "0. 周期笔记/2026/Daily/04/2026-04-20.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/2. FFmpeg 开发/1. FFmpeg 基础.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.2 压缩与编码.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.1 音视频基础知识.md",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.3 流媒体协议.md",
+    "2. 领域/嵌入式应用开发/嵌入式应用开发.README.md",
+    "0. 周期笔记/未命名.base",
     "5. 表达/README.md",
     "任务.md",
     "5. 表达/未命名.base",
-    "1. 项目/兆晟_D6P/一、项目基础信息.md",
-    "1. 项目/兆晟_D6P/云台控制开发.md",
-    "1. 项目/兆晟_D6P/兆晟_D6P.README.md",
     "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/交叉编译第三方库.md",
-    "2. 领域/嵌入式应用开发/嵌入式应用开发.README.md",
-    "2. 领域/嵌入式操作系统开发/嵌入式操作系统开发.README.md",
-    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.1 音频基础知识.md",
     "2. 领域/嵌入式应用开发/2. Linux 高级应用编程",
     "2. 领域/嵌入式应用开发/新建文件夹",
     "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260410100653.png",
@@ -272,34 +345,9 @@
     "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210806.png",
     "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409211200.png",
     "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210231.png",
-    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409210853.png",
-    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/Pasted image 20260409205650.png",
-    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource/a88a81ad93bc17917a8e0f81b99d9af1.png",
-    "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/Linux 多进程 IPC 通信.md",
     "2. 领域/嵌入式应用开发/1. Linux 应用编程基础/resource",
     "2. 领域/嵌入式应用开发/1. Linux 应用编程基础",
-    "2. 领域/嵌入式操作系统开发/5. Debian 操作系统",
-    "2. 领域/嵌入式操作系统开发/4. Ubuntu 操作系统 - 副本",
-    "2. 领域/嵌入式操作系统开发/4. Ubuntu 操作系统",
-    "2. 领域/嵌入式操作系统开发/4. Ubuntu、Debian",
-    "2. 领域/嵌入式操作系统开发/新建文件夹",
-    "0. 周期笔记/2026/Daily/04/2026-04-12.md",
-    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/1. 音视频开发基础/1.2 视频基础知识.md",
-    "2. 领域/嵌入式应用开发/1. Linux 应用编程/Linux 多进程 IPC 通信.md",
-    "2. 领域/嵌入式硬件开发/嵌入式硬件开发.README.md",
-    "README.md",
-    "2. 领域/README.md",
-    "-1. 捕获/D6P 云台控制问题修复.md",
     "主页.canvas",
-    "2. 领域/嵌入式Linux内核开发/嵌入式Linux内核开发.README.md",
-    "0. 周期笔记/2026/Daily/04/2026-04-09.md",
-    "0. 周期笔记/2026/Daily/04/2026-04-08.md",
-    "2. 领域/Template.md",
-    "2. 领域/嵌入式Linux内核/嵌入式Linux内核.README.md",
-    "2. 领域/嵌入式操纵系统/嵌入式操纵系统.README.md",
-    "-1. 捕获/第一次使用LifeOS.md",
-    "1. 项目/README.md",
-    "0. 周期笔记/2026/Daily/04/2026-04-15.md",
     "1. 项目/个人品牌-LifeOS-录制上手视频/视频教程大纲.canvas",
     "未命名.canvas",
     "2. 主题/个人品牌-LifeOS-录制上手视频/视频教程大纲.canvas",
