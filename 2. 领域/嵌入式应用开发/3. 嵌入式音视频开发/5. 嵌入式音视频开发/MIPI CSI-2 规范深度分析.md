@@ -1,4 +1,3 @@
-
 # 嵌入式音视频开发全链路学习指南
 
 > **版本**：v1.0  
@@ -12292,7 +12291,4307 @@ CDN（Content Delivery Network）通过分布式节点加速内容分发：
 -   如果仅做协议封装转换（不转码），使用`-c copy`（FFmpeg）或`passthrough`模式，避免CPU密集型编解码。
 -   4G/5G网络下，注意流量消耗。可以使用可变码率（VBR）或根据网络状况动态调整编码参数。
 
+## 5.11 ONVIF协议详解
 
+ONVIF（Open Network Video Interface Forum，开放网络视频接口论坛）是安防视频监控领域最重要的设备互操作性标准协议。它建立在第5.2节（RTP/RTCP）和第5.3节（RTSP）的媒体传输协议基础之上，定义了一套完整的设备管理、配置、发现和控制协议栈。对于嵌入式音视频开发人员而言，掌握ONVIF协议意味着能够开发出与主流VMS（视频管理系统）和NVR（网络视频录像机）无缝兼容的网络摄像机（IPC）和编码设备。
+
+本章将从协议原理出发，深入讲解 `ONVIF的Web Services` 技术栈、WS-Discovery设备发现机制、十大核心服务、Profile配置文件体系，并最终落实到嵌入式平台的协议栈实现方案，提供完整可编译的C语言代码框架。
+
+---
+### 5.11.1 ONVIF概述与发展历程
+
+#### ONVIF全称与成立背景
+
+ONVIF的全称为 **Open Network Video Interface Forum**，中文译为"开放网络视频接口论坛"。该组织由全球三大安防巨头——**Axis Communications**（瑞典，网络摄像机发明者）、**Bosch Security Systems**（德国，博世安防）和**Sony Corporation**（日本，索尼）于 **2008年11月** 联合发起成立。
+
+**成立背景分析**：
+
+2000年代中期，IP监控市场开始爆发式增长，但各家厂商采用私有协议进行设备通信，导致不同品牌的摄像机和录像机之间无法互联互通。用户采购A品牌的IPC后，只能搭配A品牌的NVR使用，形成了严重的"厂商锁定"（Vendor Lock-in）问题。这不仅增加了用户的采购和运维成本，也阻碍了IP监控市场的健康发展。
+
+三大巨头意识到，与其各自维护私有生态，不如共同制定一个开放标准，让不同厂商的设备能够"即插即用"地协同工作。这一战略决策深刻改变了安防行业的技术格局。
+
+#### 核心目标
+
+ONVIF的官方使命陈述为：*"To facilitate the development and use of a global open standard for the interface of network video products"*。具体而言，其核心目标包括：
+
+| 目标维度 | 具体内容 |
+|---------|---------|
+| **互操作性** | 确保不同厂商的网络视频设备能够无缝通信和协同工作 |
+| **标准化接口** | 为设备发现、视频流、PTZ控制、事件管理等定义统一API |
+| **降低集成成本** | 使VMS/NVR厂商无需为每个品牌开发私有协议适配器 |
+| **保护投资** | 用户可自由组合不同品牌设备，避免厂商锁定 |
+| **促进创新** | 开放标准降低准入门槛，鼓励更多厂商进入IP监控市场 |
+
+#### 版本演进历程
+
+ONVIF规范自2008年以来持续演进，核心版本迭代如下：
+
+| 版本 | 发布时间 | 核心新增特性 | 里程碑意义 |
+|------|---------|-------------|-----------|
+| **ONVIF 1.0** | 2008.11 | Device Discovery, DeviceMgmt, Media, PTZ, Imaging, Event, Analytics | 协议诞生，奠定五大基础服务 |
+| **ONVIF 2.0** | 2010.04 | 引入Recording, Search, Replay, Display服务 | 扩展到存储和回放领域 |
+| **ONVIF 2.1** | 2011.06 | 引入Receiver, DeviceIO服务 | 完善设备I/O控制 |
+| **ONVIF 2.2** | 2012.04 | 改进Media Service，增强Analytics | Profile S正式定义 |
+| **ONVIF 2.4** | 2014.06 | 引入AccessControl, DoorControl | 进入门禁领域 |
+| **ONVIF 2.6** | 2015.12 | 引入AdvancedSecurity, Credential服务 | Profile G正式定义 |
+| **Profile T** | 2018.09 | H.265/HEVC支持，高级视频配置，HTTPS强制 | 适应4K/H.265时代 |
+| **ONVIF 20.06** | 2020.06 | 引入Profile M（IoT元数据），JSON over MQTT支持 | 迈向IoT和智能分析 |
+| **ONVIF 20.12** | 2020.12 | 增强事件处理，改进Analytics配置 | 事件服务优化 |
+| **ONVIF 21.06** | 2021.06 | JSON Event over MQTT正式标准化 | 支持现代IoT消息总线 |
+| **ONVIF 21.12** | 2021.12 | 改进Configuration API，增强互操作性测试 | 配置管理现代化 |
+| **ONVIF 22.06** | 2022.06 | 增强Profile M，支持更多IoT传感器类型 | IoT融合深化 |
+| **ONVIF 22.12** | 2022.12 | 安全加固，改进TLS实现指南 | 安全能力提升 |
+| **ONVIF 23.06+** | 2023+ | 持续演进中，聚焦AI分析和云集成 | 智能化趋势 |
+
+**版本命名说明**：自2020年起，ONVIF采用年份+月份的版本命名方式（如20.06表示2020年6月版），替代了早期的纯数字版本号（1.0/2.0等）。Profile规范（S/G/C/Q/T/A/M等）则独立于核心规范版本演进。
+
+#### 会员生态与市场占有率
+
+截至2023年底，ONVIF拥有超过 **500家会员公司**，涵盖：
+
+- **摄像机厂商**：Axis、Hikvision、Dahua、Hanwha Techwin（Wisenet）、Bosch、Sony、Uniview、Tiandy等
+- **VMS/NVR厂商**：Milestone、Genetec、Avigilon、Nx Witness、DSS、iVMS等
+- **芯片方案商**：安霸（Ambarella）、海思（HiSilicon）、SigmaStar、联咏（Novatek）等
+- **软件与集成商**：大量中间件和系统集成公司
+
+**市场占有率**：据行业统计，全球销售的网络摄像机中，超过 **90%** 宣称支持ONVIF协议。在中国市场，几乎所有海思/安霸方案的网络摄像机都内建ONVIF Server功能。ONVIF已成为事实上的行业标准。
+
+#### 应用领域
+
+ONVIF协议的应用已从传统的安防监控扩展到多个垂直领域：
+
+| 应用领域 | 典型场景 | 使用的主要ONVIF服务 |
+|---------|---------|-------------------|
+| **安防监控** | 园区监控、城市安防、银行网点 | Media, Event, PTZ, Recording |
+| **智能交通** | 车牌识别、违章抓拍、交通流量 | Analytics, Media, DeviceIO |
+| **工业视觉** | 生产线监控、质量检测、安全预警 | Analytics, Event, Thermal |
+| **智慧城市** | 城市大脑、雪亮工程、天网系统 | Media, Analytics, Event, Search |
+| **智慧零售** | 客流统计、热区分析、收银防损 | Analytics, Event, Media |
+| **智慧楼宇** | 门禁联动、电梯监控、停车场 | AccessControl, Media, Event |
+| **智慧医疗** | 病房监控、手术示教、药品监管 | Media, Recording, Analytics |
+
+---
+
+### 5.11.2 ONVIF技术架构基础
+
+#### Web Services技术栈
+
+ONVIF协议选择 **Web Services** 作为其底层通信技术，具体采用以下协议栈：
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    ONVIF Services                    │
+│  (Device/Media/PTZ/Event/Analytics/Search/...)     │
+├─────────────────────────────────────────────────────┤
+│                 SOAP 1.2 Protocol                   │
+│          (Simple Object Access Protocol)             │
+├─────────────────────────────────────────────────────┤
+│                   XML Data Format                     │
+│    (Extensible Markup Language, W3C Standard)       │
+├─────────────────────────────────────────────────────┤
+│                  WSDL 1.1 / XSD                       │
+│  (Web Services Description Language / XML Schema)   │
+├─────────────────────────────────────────────────────┤
+│              HTTP/1.1 or HTTPS Transport             │
+│               (RFC 2616 / TLS 1.2+)                 │
+├─────────────────────────────────────────────────────┤
+│                   TCP/IP Network                      │
+│         (IPv4/IPv6, 默认端口80/443/3702)            │
+└─────────────────────────────────────────────────────┘
+```
+
+**技术选型分析**：ONVIF选择SOAP/XML而非REST/JSON，主要原因如下：
+
+| 对比维度 | SOAP/XML (ONVIF选择) | REST/JSON (现代趋势) |
+|---------|---------------------|---------------------|
+| **标准化程度** | WSDL提供强类型接口定义，自动生成代码 | 依赖文档或OpenAPI，弱类型 |
+| **工具链成熟度** | 2008年时gSOAP/Axis等工具已非常成熟 | 当时REST框架尚不成熟 |
+| **企业级特性** | 原生支持WS-Security、WS-Addressing、可靠消息 | 需额外实现安全层 |
+| **安防行业偏好** | 企业级IT系统普遍接受SOAP | 互联网公司更偏好REST |
+| **自描述能力** | XML Schema强类型，消息自带结构定义 | JSON Schema较弱 |
+| **二进制效率** | XML冗长，不适合带宽受限场景 | JSON更紧凑，但仍为文本 |
+| **嵌入式友好度** | XML解析消耗内存和CPU | JSON解析相对轻量 |
+| **协议开销** | 消息体大（3~10倍于二进制） | 相对紧凑 |
+
+**工程实践结论**：在2008年的技术背景下，SOAP是安防行业最合理的选择。尽管现代IoT协议（如MQTT+JSON）更加轻量，但ONVIF的SOAP/XML架构已成为行业既定事实标准，变更成本极高。ONVIF 20.06起开始引入JSON over MQTT作为补充，但SOAP/XML仍是核心。
+
+#### ONVIF服务架构总览
+
+ONVIF规范将设备功能划分为多个独立的服务（Service），每个服务对应一个SOAP Web Service Endpoint：
+
+```
+                    [ ONVIF Client ]
+                           |
+                           | HTTP POST / SOAP/XML
+                           v
+                    [ ONVIF Device ]
+                           |
+        ┌─────────┬─────────┬─────────┬─────────┬─────────┐
+        |         |         |         |         |         |
+    Device    Media/     PTZ     Event   Imaging  Analytics
+    Mgmt     Media2     Service  Service Service  Service
+    Service  Service
+        |         |         |         |         |         |
+    ──┴─────────┴─────────┴─────────┴─────────┴─────────┘
+        |         |         |         |         |         |
+    Search  Recording  Replay   Display  Receiver  DeviceIO
+    Service  Service    Service  Service  Service   Service
+        |         |         |         |         |         |
+    ──┴─────────┴─────────┴─────────┴─────────┴─────────┘
+        |         |         |         |
+    Access  Door    Thermal  Security Credential  Audio
+    Control Control Service  Service  Service   Service
+    Service Service
+```
+
+**核心服务端点URL约定**：
+
+| 服务名称 | 标准端点路径（相对设备IP） | 说明 |
+|---------|--------------------------|------|
+| Device Service | `http://<ip>/onvif/device_service` | 所有设备必须实现 |
+| Media Service | `http://<ip>/onvif/media_service` | 视频流相关 |
+| Media2 Service | `http://<ip>/onvif/media2_service` | Media的升级版 |
+| PTZ Service | `http://<ip>/onvif/ptz_service` | 云台控制 |
+| Imaging Service | `http://<ip>/onvif/imaging_service` | 图像参数 |
+| Event Service | `http://<ip>/onvif/event_service` | 事件通知 |
+| Analytics Service | `http://<ip>/onvif/analytics_service` | 视频分析 |
+| Search Service | `http://<ip>/onvif/search_service` | 录像检索 |
+| Recording Service | `http://<ip>/onvif/recording_service` | 录像控制 |
+| Replay Service | `http://<ip>/onvif/replay_service` | 录像回放 |
+
+#### SOAP消息结构详解
+
+所有ONVIF服务通信均基于SOAP 1.2信封格式。以下是一个典型的SOAP请求/响应消息结构：
+
+**SOAP请求消息（以GetDeviceInformation为例）**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+  <s:Header>
+    <!-- WS-Security认证头（可选） -->
+    <Security s:mustUnderstand="1"
+              xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+      <UsernameToken>
+        <Username>admin</Username>
+        <Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">
+          XXXXXXXX</Password>
+        <Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">
+          YYYYYYYY</Nonce>
+        <Created>2023-10-01T12:00:00.000Z</Created>
+      </UsernameToken>
+    </Security>
+  </s:Header>
+  <s:Body>
+    <tds:GetDeviceInformation/>
+  </s:Body>
+</s:Envelope>
+```
+
+**SOAP响应消息**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
+            xmlns:tt="http://www.onvif.org/ver10/schema">
+  <s:Body>
+    <tds:GetDeviceInformationResponse>
+      <tds:Manufacturer>ExampleCorp</tds:Manufacturer>
+      <tds:Model>IPC-2000A</tds:Model>
+      <tds:FirmwareVersion>V2.1.3.20231001</tds:FirmwareVersion>
+      <tds:SerialNumber>SN1234567890</tds:SerialNumber>
+      <tds:HardwareId>HW-2023A</tds:HardwareId>
+    </tds:GetDeviceInformationResponse>
+  </s:Body>
+</s:Envelope>
+```
+
+**SOAP Fault（错误响应）结构**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+  <s:Body>
+    <s:Fault>
+      <s:Code>
+        <s:Value>s:Sender</s:Value>
+        <s:Subcode>
+          <s:Value>ter:NotAuthorized</s:Value>
+        </s:Subcode>
+      </s:Code>
+      <s:Reason>
+        <s:Text xml:lang="en">The sender is not authorized to access the requested resource.</s:Text>
+      </s:Reason>
+    </s:Fault>
+  </s:Body>
+</s:Envelope>
+```
+
+**ONVIF命名空间速查表**：
+
+| 命名空间前缀 | URI | 对应规范 |
+|------------|-----|---------|
+| `soap` / `s` | `http://www.w3.org/2003/05/soap-envelope` | SOAP 1.2信封 |
+| `wsdl` | `http://schemas.xmlsoap.org/wsdl/` | WSDL 1.1 |
+| `xsd` | `http://www.w3.org/2001/XMLSchema` | XML Schema |
+| `wsse` | `http://docs.oasis-open.org/wss/2004/01/...` | WS-Security |
+| `wsa` | `http://www.w3.org/2005/08/addressing` | WS-Addressing |
+| `wsdd` | `http://schemas.xmlsoap.org/ws/2005/04/discovery` | WS-Discovery |
+| `tds` | `http://www.onvif.org/ver10/device/wsdl` | Device Service WSDL |
+| `trt` | `http://www.onvif.org/ver10/media/wsdl` | Media Service WSDL |
+| `tr2` | `http://www.onvif.org/ver20/media/wsdl` | Media2 Service WSDL |
+| `tptz` | `http://www.onvif.org/ver20/ptz/wsdl` | PTZ Service WSDL |
+| `timg` | `http://www.onvif.org/ver20/imaging/wsdl` | Imaging Service WSDL |
+| `tev` | `http://www.onvif.org/ver10/events/wsdl` | Event Service WSDL |
+| `tan` | `http://www.onvif.org/ver20/analytics/wsdl` | Analytics Service WSDL |
+| `tt` | `http://www.onvif.org/ver10/schema` | ONVIF通用数据类型Schema |
+| `ter` | `http://www.onvif.org/ver10/error` | ONVIF错误代码命名空间 |
+
+---
+
+### 5.11.3 WS-Discovery设备发现机制
+
+#### WS-Discovery协议原理
+
+WS-Discovery（Web Services Dynamic Discovery）是OASIS标准（版本1.1），定义了局域网内Web Services设备的动态发现机制。ONVIF将其作为设备发现的核心协议，使客户端能够在不知道设备IP地址的情况下，自动搜索并发现网络中的ONVIF设备。
+
+**核心原理**：基于UDP多播的消息交换机制，设备通过多播地址向网络通告自身存在，客户端通过多播查询搜索设备。
+
+#### WS-Discovery多播地址
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| **IPv4多播地址** | `239.255.255.250` | SSDP/WS-Discovery标准多播地址 |
+| **IPv6多播地址** | `ff02::c` | 本地链路多播地址 |
+| **UDP端口** | `3702` | WS-Discovery专用端口 |
+| **SOAP Action** | `http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe` | Probe消息Action |
+| **匹配规则** | 类型匹配（Type）/ 范围匹配（Scope） | 支持按设备类型和范围过滤 |
+
+#### WS-Discovery消息类型
+
+WS-Discovery定义了四种核心消息类型：
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    WS-Discovery 交互模型                     │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Hello (设备上线通告)                                      │
+│     [Device] ──UDP多播──> [所有客户端]                         │
+│     设备启动/网络恢复时主动发送，宣告自身存在                    │
+│                                                              │
+│  2. Probe (客户端搜索请求)                                     │
+│     [Client] ──UDP多播──> [所有设备]                           │
+│     客户端搜索特定类型的设备                                   │
+│                                                              │
+│  3. ProbeMatch (设备响应)                                     │
+│     [Device] ──UDP单播──> [请求客户端]                         │
+│     匹配的设备向客户端发送响应，包含XAddrs（访问地址）           │
+│                                                              │
+│  4. Resolve/ResolveMatch (地址解析)                          │
+│     [Client] ──UDP多播──> [特定设备]                           │
+│     通过EndpointReference解析设备当前地址                     │
+│                                                              │
+│  5. Bye (设备离线通告)                                        │
+│     [Device] ──UDP多播──> [所有客户端]                         │
+│     设备关机/断网时发送，通知客户端移除设备                      │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Hello消息详解（设备上线通告）
+
+当ONVIF设备上线时，主动向多播地址发送Hello消息，让网络中的客户端自动感知其存在。
+
+**Hello消息XML格式**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+            xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+            xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
+  <s:Header>
+    <a:Action>
+      http://schemas.xmlsoap.org/ws/2005/04/discovery/Hello
+    </a:Action>
+    <a:MessageID>
+      urn:uuid:4be9e2dc-c615-4c41-8e71-1e9ad1f370a5
+    </a:MessageID>
+    <a:To>
+      urn:schemas-xmlsoap-org:ws:2005:04:discovery
+    </a:To>
+    <d:AppSequence InstanceId="1" MessageNumber="1"/>
+  </s:Header>
+  <s:Body>
+    <d:Hello>
+      <a:EndpointReference>
+        <a:Address>
+          urn:uuid:4be9e2dc-c615-4c41-8e71-1e9ad1f370a5
+        </a:Address>
+      </a:EndpointReference>
+      <d:Types>dn:NetworkVideoTransmitter</d:Types>
+      <d:Scopes>
+        onvif://www.onvif.org/type/video_encoder
+        onvif://www.onvif.org/type/audio_encoder
+        onvif://www.onvif.org/type/ptz
+        onvif://www.onvif.org/hardware/IPC-2000A
+        onvif://www.onvif.org/name/ExampleCorp-IPC
+        onvif://www.onvif.org/location/country/china
+      </d:Scopes>
+      <d:XAddrs>
+        http://192.168.1.100:80/onvif/device_service
+        http://[fe80::1234:5678:abcd:ef01]:80/onvif/device_service
+      </d:XAddrs>
+      <d:MetadataVersion>1</d:MetadataVersion>
+    </d:Hello>
+  </s:Body>
+</s:Envelope>
+```
+
+**Hello消息字段解析**：
+
+| 字段 | 说明 | 示例值 |
+|------|------|--------|
+| `MessageID` | 唯一标识此消息，UUID格式 | `urn:uuid:...` |
+| `EndpointReference/Address` | 设备的持久唯一标识 | 与MessageID通常相同 |
+| `Types` | 设备类型，ONVIF预定义 | `dn:NetworkVideoTransmitter` |
+| `Scopes` | 设备能力范围，空格分隔的URI列表 | `onvif://...` 格式 |
+| `XAddrs` | 设备服务端点URL，空格分隔 | `http://ip:port/path` |
+| `MetadataVersion` | 设备元数据版本号 | 整数，变化时触发客户端重新获取 |
+| `AppSequence/InstanceId` | 设备启动实例标识 | 每次重启递增 |
+
+#### Probe消息详解（客户端搜索请求）
+
+客户端通过发送Probe多播消息来搜索网络中的ONVIF设备。
+
+**Probe消息XML格式**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+            xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+  <s:Header>
+    <a:Action>
+      http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe
+    </a:Action>
+    <a:MessageID>
+      urn:uuid:3c8e3b5e-7c2d-4f5a-9b1e-6d7c8f9a0b1c
+    </a:MessageID>
+    <a:To>
+      urn:schemas-xmlsoap-org:ws:2005:04:discovery
+    </a:To>
+  </s:Header>
+  <s:Body>
+    <d:Probe>
+      <d:Types>dn:NetworkVideoTransmitter</d:Types>
+      <!-- 可选: 按Scope过滤 -->
+      <!-- <d:Scopes>onvif://www.onvif.org/type/video_encoder</d:Scopes> -->
+    </d:Probe>
+  </s:Body>
+</s:Envelope>
+```
+
+#### ProbeMatch消息详解（设备响应）
+
+匹配的设备通过UDP单播向客户端返回ProbeMatch响应。
+
+**ProbeMatch消息XML格式**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+            xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+  <s:Header>
+    <a:Action>
+      http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches
+    </a:Action>
+    <a:RelatesTo>
+      urn:uuid:3c8e3b5e-7c2d-4f5a-9b1e-6d7c8f9a0b1c
+    </a:RelatesTo>
+    <a:MessageID>
+      urn:uuid:9f8e7d6c-5b4a-4a3b-8c2d-1e2f3a4b5c6d
+    </a:MessageID>
+    <a:To>
+      http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous
+    </a:To>
+  </s:Header>
+  <s:Body>
+    <d:ProbeMatches>
+      <d:ProbeMatch>
+        <a:EndpointReference>
+          <a:Address>
+            urn:uuid:4be9e2dc-c615-4c41-8e71-1e9ad1f370a5
+          </a:Address>
+        </a:EndpointReference>
+        <d:Types>dn:NetworkVideoTransmitter</d:Types>
+        <d:Scopes>
+          onvif://www.onvif.org/type/video_encoder
+          onvif://www.onvif.org/hardware/IPC-2000A
+          onvif://www.onvif.org/name/ExampleCorp-IPC
+        </d:Scopes>
+        <d:XAddrs>
+          http://192.168.1.100:80/onvif/device_service
+        </d:XAddrs>
+        <d:MetadataVersion>1</d:MetadataVersion>
+      </d:ProbeMatch>
+    </d:ProbeMatches>
+  </s:Body>
+</s:Envelope>
+```
+
+**关键字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| `RelatesTo` | 必须与对应Probe的`MessageID`一致，用于匹配请求和响应 |
+| `XAddrs` | 这是最重要的字段！客户端从此获取设备服务URL |
+
+#### 嵌入式实现要点
+
+在嵌入式设备上实现WS-Discovery需要以下关键技术点：
+
+1. **UDP多播套接字编程**：绑定3702端口，加入239.255.255.250多播组
+2. **网络状态监控**：设备IP变化时重发Hello，网络断开时发送Bye
+3. **消息去重**：客户端可能收到重复的ProbeMatch，需通过MessageID去重
+4. **响应抑制**：同一Probe可能引发多个设备响应，需合理设置超时
+
+#### WS-Discovery嵌入式C语言实现
+
+以下代码展示了在嵌入式Linux系统上实现WS-Discovery服务端（设备端）的核心代码。
+
+**文件：wsdd_server.h**
+
+```c
+#ifndef __WSDD_SERVER_H__
+#define __WSDD_SERVER_H__
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* WS-Discovery 配置参数 */
+#define WSDD_MULTICAST_ADDR     "239.255.255.250"
+#define WSDD_UDP_PORT           3702
+#define WSDD_HELLO_INTERVAL_MS  10000   /* Hello重发间隔（网络变化时） */
+#define WSDD_PROBE_TIMEOUT_MS   5000    /* Probe响应超时 */
+#define WSDD_MAX_MESSAGE_SIZE   4096
+
+/* 设备标识信息 */
+typedef struct {
+    char    uuid[64];           /* 设备唯一UUID，如 "urn:uuid:xxxx" */
+    char    types[256];         /* 设备类型，如 "dn:NetworkVideoTransmitter" */
+    char    scopes[512];        /* Scope列表，空格分隔 */
+    char    xaddrs[256];        /* 设备服务URL */
+    int     metadata_version;   /* 元数据版本 */
+    int     instance_id;        /* 设备启动实例ID */
+    int     message_num;        /* 消息序号 */
+} wsdd_device_info_t;
+
+/* WS-Discovery 服务端上下文 */
+typedef struct {
+    int                 udp_socket;
+    int                 udp_send_socket;
+    wsdd_device_info_t  device_info;
+    bool                running;
+    char                local_ip[64];
+    uint16_t            local_port;
+} wsdd_server_t;
+
+/* 初始化/反初始化 */
+int  wsdd_server_init(wsdd_server_t *srv, const wsdd_device_info_t *info,
+                      const char *local_ip, uint16_t http_port);
+void wsdd_server_deinit(wsdd_server_t *srv);
+
+/* 发送各类WS-Discovery消息 */
+int wsdd_send_hello(wsdd_server_t *srv);
+int wsdd_send_bye(wsdd_server_t *srv);
+int wsdd_send_probe_match(wsdd_server_t *srv,
+                           const char *relates_to_msg_id,
+                           const char *client_addr,
+                           uint16_t client_port);
+
+/* 主循环处理（阻塞式/非阻塞式） */
+int wsdd_server_run_once(wsdd_server_t *srv, int timeout_ms);
+int wsdd_server_run(wsdd_server_t *srv);  /* 内部循环，直到running=false */
+
+/* 网络状态变化通知（IP变化时调用） */
+int wsdd_on_network_changed(wsdd_server_t *srv,
+                            const char *new_ip,
+                            uint16_t new_port);
+
+#endif /* __WSDD_SERVER_H__ */
+```
+
+**文件：wsdd_server.c —— UDP多播与消息处理核心**
+
+```c
+#include "wsdd_server.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <time.h>
+
+/* UUID生成辅助函数 */
+static void generate_uuid(char *buf, size_t buflen)
+{
+    /* 在真实实现中，应使用设备持久化存储的UUID（如MAC地址派生） */
+    /* 这里使用简单的时间+随机数模拟 */
+    static int seeded = 0;
+    if (!seeded) {
+        srand((unsigned)time(NULL));
+        seeded = 1;
+    }
+    snprintf(buf, buflen, "urn:uuid:%08x-%04x-%04x-%04x-%012x",
+             rand(), rand() & 0xFFFF, rand() & 0xFFFF,
+             rand() & 0xFFFF, (unsigned long long)rand() << 32 | rand());
+}
+
+/* 生成当前UTC时间字符串 */
+static void get_utc_timestamp(char *buf, size_t buflen)
+{
+    time_t now = time(NULL);
+    struct tm *gmt = gmtime(&now);
+    strftime(buf, buflen, "%Y-%m-%dT%H:%M:%S.000Z", gmt);
+}
+
+/* 创建WS-Discovery监听套接字（接收多播Probe） */
+static int wsdd_create_listener(const char *local_ip)
+{
+    int sock;
+    int reuse = 1;
+    struct ip_mreq mreq;
+    struct sockaddr_in local_addr;
+
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    /* 允许地址重用 */
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+                   &reuse, sizeof(reuse)) < 0) {
+        perror("setsockopt SO_REUSEADDR");
+        close(sock);
+        return -1;
+    }
+
+    /* 绑定到WS-Discovery端口 */
+    memset(&local_addr, 0, sizeof(local_addr));
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = htons(WSDD_UDP_PORT);
+    local_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
+        perror("bind");
+        close(sock);
+        return -1;
+    }
+
+    /* 加入多播组 */
+    memset(&mreq, 0, sizeof(mreq));
+    mreq.imr_multiaddr.s_addr = inet_addr(WSDD_MULTICAST_ADDR);
+    mreq.imr_interface.s_addr = inet_addr(local_ip);
+
+    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                   &mreq, sizeof(mreq)) < 0) {
+        perror("setsockopt IP_ADD_MEMBERSHIP");
+        close(sock);
+        return -1;
+    }
+
+    return sock;
+}
+
+/* 创建WS-Discovery发送套接字（发送多播Hello/Bye） */
+static int wsdd_create_sender(void)
+{
+    int sock;
+    int ttl = 128;  /* 多播TTL，局域网内足够 */
+
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL,
+                   &ttl, sizeof(ttl)) < 0) {
+        perror("setsockopt IP_MULTICAST_TTL");
+        close(sock);
+        return -1;
+    }
+
+    return sock;
+}
+
+int wsdd_server_init(wsdd_server_t *srv, const wsdd_device_info_t *info,
+                     const char *local_ip, uint16_t http_port)
+{
+    if (!srv || !info || !local_ip) {
+        return -1;
+    }
+
+    memset(srv, 0, sizeof(*srv));
+    srv->device_info = *info;
+    strncpy(srv->local_ip, local_ip, sizeof(srv->local_ip) - 1);
+    srv->local_port = http_port;
+    srv->running = true;
+
+    /* 如果没有预置UUID，生成一个 */
+    if (strlen(srv->device_info.uuid) == 0) {
+        generate_uuid(srv->device_info.uuid,
+                      sizeof(srv->device_info.uuid));
+    }
+
+    /* 创建监听和发送套接字 */
+    srv->udp_socket = wsdd_create_listener(local_ip);
+    if (srv->udp_socket < 0) {
+        return -1;
+    }
+
+    srv->udp_send_socket = wsdd_create_sender();
+    if (srv->udp_send_socket < 0) {
+        close(srv->udp_socket);
+        srv->udp_socket = -1;
+        return -1;
+    }
+
+    /* 设备上线发送Hello */
+    wsdd_send_hello(srv);
+
+    return 0;
+}
+
+void wsdd_server_deinit(wsdd_server_t *srv)
+{
+    if (!srv) return;
+
+    srv->running = false;
+
+    /* 发送Bye消息通知离线 */
+    if (srv->udp_send_socket >= 0) {
+        wsdd_send_bye(srv);
+        usleep(100000); /* 等待100ms让消息发出 */
+    }
+
+    if (srv->udp_socket >= 0) {
+        close(srv->udp_socket);
+        srv->udp_socket = -1;
+    }
+    if (srv->udp_send_socket >= 0) {
+        close(srv->udp_send_socket);
+        srv->udp_send_socket = -1;
+    }
+}
+```
+
+**文件：wsdd_messages.c —— SOAP消息组装**
+
+```c
+#include "wsdd_server.h"
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+/* 构建Hello消息SOAP/XML */
+static int build_hello_message(const wsdd_device_info_t *dev,
+                              const char *xaddrs,
+                              char *buf, size_t buflen)
+{
+    char utc_time[64];
+    get_utc_timestamp(utc_time, sizeof(utc_time));
+
+    int len = snprintf(buf, buflen,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"\n"
+        "            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"\n"
+        "            xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\"\n"
+        "            xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">\n"
+        "  <s:Header>\n"
+        "    <a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Hello</a:Action>\n"
+        "    <a:MessageID>%s</a:MessageID>\n"
+        "    <a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
+        "    <d:AppSequence InstanceId=\"%d\" MessageNumber=\"%d\"/>\n"
+        "  </s:Header>\n"
+        "  <s:Body>\n"
+        "    <d:Hello>\n"
+        "      <a:EndpointReference>\n"
+        "        <a:Address>%s</a:Address>\n"
+        "      </a:EndpointReference>\n"
+        "      <d:Types>%s</d:Types>\n"
+        "      <d:Scopes>%s</d:Scopes>\n"
+        "      <d:XAddrs>%s</d:XAddrs>\n"
+        "      <d:MetadataVersion>%d</d:MetadataVersion>\n"
+        "    </d:Hello>\n"
+        "  </s:Body>\n"
+        "</s:Envelope>\n",
+        dev->uuid,
+        dev->instance_id,
+        dev->message_num++,
+        dev->uuid,
+        dev->types,
+        dev->scopes,
+        xaddrs,
+        dev->metadata_version
+    );
+
+    return (len > 0 && (size_t)len < buflen) ? len : -1;
+}
+
+/* 构建ProbeMatch消息SOAP/XML */
+static int build_probe_match_message(const wsdd_device_info_t *dev,
+                                      const char *xaddrs,
+                                      const char *relates_to,
+                                      char *buf, size_t buflen)
+{
+    int len = snprintf(buf, buflen,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"\n"
+        "            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"\n"
+        "            xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\"\n"
+        "            xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">\n"
+        "  <s:Header>\n"
+        "    <a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</a:Action>\n"
+        "    <a:RelatesTo>%s</a:RelatesTo>\n"
+        "    <a:MessageID>urn:uuid:probe-match-%d</a:MessageID>\n"
+        "    <a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>\n"
+        "  </s:Header>\n"
+        "  <s:Body>\n"
+        "    <d:ProbeMatches>\n"
+        "      <d:ProbeMatch>\n"
+        "        <a:EndpointReference>\n"
+        "          <a:Address>%s</a:Address>\n"
+        "        </a:EndpointReference>\n"
+        "        <d:Types>%s</d:Types>\n"
+        "        <d:Scopes>%s</d:Scopes>\n"
+        "        <d:XAddrs>%s</d:XAddrs>\n"
+        "        <d:MetadataVersion>%d</d:MetadataVersion>\n"
+        "      </d:ProbeMatch>\n"
+        "    </d:ProbeMatches>\n"
+        "  </s:Body>\n"
+        "</s:Envelope>\n",
+        relates_to,
+        dev->message_num++,
+        dev->uuid,
+        dev->types,
+        dev->scopes,
+        xaddrs,
+        dev->metadata_version
+    );
+
+    return (len > 0 && (size_t)len < buflen) ? len : -1;
+}
+
+/* 构建Bye消息SOAP/XML */
+static int build_bye_message(const wsdd_device_info_t *dev,
+                            char *buf, size_t buflen)
+{
+    int len = snprintf(buf, buflen,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"\n"
+        "            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"\n"
+        "            xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">\n"
+        "  <s:Header>\n"
+        "    <a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye</a:Action>\n"
+        "    <a:MessageID>urn:uuid:bye-%d</a:MessageID>\n"
+        "    <a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
+        "  </s:Header>\n"
+        "  <s:Body>\n"
+        "    <d:Bye>\n"
+        "      <a:EndpointReference>\n"
+        "        <a:Address>%s</a:Address>\n"
+        "      </a:EndpointReference>\n"
+        "      <d:Types>%s</d:Types>\n"
+        "      <d:Scopes>%s</d:Scopes>\n"
+        "      <d:XAddrs>%s</d:XAddrs>\n"
+        "      <d:MetadataVersion>%d</d:MetadataVersion>\n"
+        "    </d:Bye>\n"
+        "  </s:Body>\n"
+        "</s:Envelope>\n",
+        dev->message_num++,
+        dev->uuid,
+        dev->types,
+        dev->scopes,
+        "",  /* Bye时XAddrs可为空 */
+        dev->metadata_version
+    );
+
+    return (len > 0 && (size_t)len < buflen) ? len : -1;
+}
+
+/* 发送多播消息 */
+static int send_multicast(int sock, const char *msg, int msg_len)
+{
+    struct sockaddr_in multicast_addr;
+
+    memset(&multicast_addr, 0, sizeof(multicast_addr));
+    multicast_addr.sin_family = AF_INET;
+    multicast_addr.sin_port = htons(WSDD_UDP_PORT);
+    multicast_addr.sin_addr.s_addr = inet_addr(WSDD_MULTICAST_ADDR);
+
+    return sendto(sock, msg, msg_len, 0,
+                  (struct sockaddr *)&multicast_addr,
+                  sizeof(multicast_addr));
+}
+
+/* 发送单播消息（用于ProbeMatch响应） */
+static int send_unicast(int sock, const char *msg, int msg_len,
+                         const char *dest_ip, uint16_t dest_port)
+{
+    struct sockaddr_in dest_addr;
+
+    memset(&dest_addr, 0, sizeof(dest_addr));
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(dest_port);
+    dest_addr.sin_addr.s_addr = inet_addr(dest_ip);
+
+    return sendto(sock, msg, msg_len, 0,
+                  (struct sockaddr *)&dest_addr,
+                  sizeof(dest_addr));
+}
+
+/* 公共API实现 */
+int wsdd_send_hello(wsdd_server_t *srv)
+{
+    char msg[WSDD_MAX_MESSAGE_SIZE];
+    char xaddrs[256];
+
+    if (!srv || srv->udp_send_socket < 0) return -1;
+
+    snprintf(xaddrs, sizeof(xaddrs), "http://%s:%d/onvif/device_service",
+             srv->local_ip, srv->local_port);
+
+    int msg_len = build_hello_message(&srv->device_info, xaddrs,
+                                       msg, sizeof(msg));
+    if (msg_len < 0) return -1;
+
+    return send_multicast(srv->udp_send_socket, msg, msg_len);
+}
+
+int wsdd_send_bye(wsdd_server_t *srv)
+{
+    char msg[WSDD_MAX_MESSAGE_SIZE];
+
+    if (!srv || srv->udp_send_socket < 0) return -1;
+
+    int msg_len = build_bye_message(&srv->device_info, msg, sizeof(msg));
+    if (msg_len < 0) return -1;
+
+    return send_multicast(srv->udp_send_socket, msg, msg_len);
+}
+
+int wsdd_send_probe_match(wsdd_server_t *srv,
+                           const char *relates_to_msg_id,
+                           const char *client_addr,
+                           uint16_t client_port)
+{
+    char msg[WSDD_MAX_MESSAGE_SIZE];
+    char xaddrs[256];
+
+    if (!srv || srv->udp_socket < 0 || !relates_to_msg_id) return -1;
+
+    snprintf(xaddrs, sizeof(xaddrs), "http://%s:%d/onvif/device_service",
+             srv->local_ip, srv->local_port);
+
+    int msg_len = build_probe_match_message(&srv->device_info, xaddrs,
+                                             relates_to_msg_id,
+                                             msg, sizeof(msg));
+    if (msg_len < 0) return -1;
+
+    return send_unicast(srv->udp_socket, msg, msg_len,
+                         client_addr, client_port);
+}
+
+int wsdd_on_network_changed(wsdd_server_t *srv,
+                             const char *new_ip,
+                             uint16_t new_port)
+{
+    if (!srv || !new_ip) return -1;
+
+    /* 发送Bye（旧地址） */
+    wsdd_send_bye(srv);
+
+    /* 更新地址 */
+    strncpy(srv->local_ip, new_ip, sizeof(srv->local_ip) - 1);
+    srv->local_port = new_port;
+    srv->device_info.instance_id++;
+    srv->device_info.message_num = 1;
+
+    /* 发送Hello（新地址） */
+    wsdd_send_hello(srv);
+
+    return 0;
+}
+```
+
+**文件：wsdd_handler.c —— 消息接收与解析**
+
+```c
+#include "wsdd_server.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/select.h>
+#include <unistd.h>
+
+/* 简单的XML标签提取（非完整解析，嵌入式场景够用） */
+static int extract_xml_tag_value(const char *xml, const char *tag_name,
+                                  char *value, size_t value_len)
+{
+    char start_tag[128];
+    char end_tag[128];
+    const char *start, *end;
+
+    snprintf(start_tag, sizeof(start_tag), "</%s>", tag_name);
+    snprintf(end_tag, sizeof(end_tag), "</%s>", tag_name);
+
+    start = strstr(xml, start_tag);
+    if (!start) return -1;
+
+    /* 跳过到标签结束位置（处理属性） */
+    start = strchr(start, '>');
+    if (!start) return -1;
+    start++;  /* 跳过 > */
+
+    end = strstr(start, end_tag);
+    if (!end) return -1;
+
+    size_t len = end - start;
+    if (len >= value_len) len = value_len - 1;
+
+    strncpy(value, start, len);
+    value[len] = '\0';
+
+    return 0;
+}
+
+/* 从Probe消息中提取MessageID */
+static int extract_probe_msg_id(const char *xml, char *msg_id, size_t len)
+{
+    return extract_xml_tag_value(xml, "a:MessageID", msg_id, len);
+}
+
+/* 从Probe消息中提取Types（可选过滤条件） */
+static int extract_probe_types(const char *xml, char *types, size_t len)
+{
+    /* Probe中Types是可选的，可能没有 */
+    if (extract_xml_tag_value(xml, "d:Types", types, len) < 0) {
+        /* 尝试其他命名空间前缀 */
+        if (extract_xml_tag_value(xml, "Types", types, len) < 0) {
+            types[0] = '\0';
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/* 判断设备是否匹配Probe请求 */
+static bool device_matches_probe(const wsdd_device_info_t *dev,
+                                  const char *probe_types)
+{
+    /* 如果Probe没有指定Types，则匹配所有设备 */
+    if (!probe_types || strlen(probe_types) == 0) {
+        return true;
+    }
+
+    /* 检查设备Types是否包含Probe请求的类型 */
+    if (strstr(dev->types, probe_types) != NULL) {
+        return true;
+    }
+
+    return false;
+}
+
+/* 处理接收到的WS-Discovery消息 */
+static int handle_wsdd_message(wsdd_server_t *srv,
+                                const char *msg, int msg_len,
+                                const char *client_addr,
+                                uint16_t client_port)
+{
+    char action[256];
+    char msg_id[256];
+    char probe_types[256];
+
+    (void)msg_len;  /* 在完整解析中用于边界检查 */
+
+    /* 提取SOAP Action */
+    if (extract_xml_tag_value(msg, "a:Action", action, sizeof(action)) < 0) {
+        /* 尝试不带命名空间前缀 */
+        if (extract_xml_tag_value(msg, "Action", action, sizeof(action)) < 0) {
+            return -1;
+        }
+    }
+
+    printf("[WSDD] Received message from %s:%d, Action: %s\n",
+           client_addr, client_port, action);
+
+    /* 判断消息类型 */
+    if (strstr(action, "Probe") != NULL &&
+        strstr(action, "ProbeMatch") == NULL) {
+        /* 收到Probe请求 */
+        if (extract_probe_msg_id(msg, msg_id, sizeof(msg_id)) < 0) {
+            return -1;
+        }
+
+        probe_types[0] = '\0';
+        extract_probe_types(msg, probe_types, sizeof(probe_types));
+
+        if (device_matches_probe(&srv->device_info, probe_types)) {
+            printf("[WSDD] Device matches probe, sending ProbeMatch...\n");
+            wsdd_send_probe_match(srv, msg_id, client_addr, client_port);
+        } else {
+            printf("[WSDD] Device types '%s' don't match probe '%s'\n",
+                   srv->device_info.types, probe_types);
+        }
+    }
+    else if (strstr(action, "Resolve") != NULL) {
+        /* 收到Resolve请求（较少使用） */
+        /* 实现方式类似ProbeMatch，返回ResolveMatch */
+        printf("[WSDD] Resolve request received (not fully implemented)\n");
+    }
+    /* Hello/Bye/ProbeMatch是发给客户端的，设备端不应收到 */
+
+    return 0;
+}
+
+/* 主循环处理一次消息 */
+int wsdd_server_run_once(wsdd_server_t *srv, int timeout_ms)
+{
+    fd_set read_fds;
+    struct timeval tv;
+    char buf[WSDD_MAX_MESSAGE_SIZE];
+    int ret;
+
+    if (!srv || srv->udp_socket < 0) return -1;
+
+    FD_ZERO(&read_fds);
+    FD_SET(srv->udp_socket, &read_fds);
+
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    ret = select(srv->udp_socket + 1, &read_fds, NULL, NULL, &tv);
+    if (ret < 0) {
+        perror("select");
+        return -1;
+    }
+    if (ret == 0) {
+        return 0;  /* 超时 */
+    }
+
+    if (FD_ISSET(srv->udp_socket, &read_fds)) {
+        struct sockaddr_in client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+        ssize_t recv_len;
+
+        recv_len = recvfrom(srv->udp_socket, buf, sizeof(buf) - 1, 0,
+                            (struct sockaddr *)&client_addr, &addr_len);
+        if (recv_len < 0) {
+            perror("recvfrom");
+            return -1;
+        }
+
+        buf[recv_len] = '\0';
+
+        char client_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+
+        handle_wsdd_message(srv, buf, (int)recv_len,
+                            client_ip, ntohs(client_addr.sin_port));
+    }
+
+    return 0;
+}
+
+/* 持续运行的主循环 */
+int wsdd_server_run(wsdd_server_t *srv)
+{
+    if (!srv) return -1;
+
+    while (srv->running) {
+        wsdd_server_run_once(srv, 1000);  /* 1秒超时循环 */
+    }
+
+    return 0;
+}
+```
+
+**文件：wsdd_main.c —— 使用示例**
+
+```c
+#include "wsdd_server.h"
+#include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
+
+static volatile int g_running = 1;
+
+static void sigint_handler(int sig)
+{
+    (void)sig;
+    g_running = 0;
+}
+
+int main(int argc, char *argv[])
+{
+    wsdd_server_t srv;
+    wsdd_device_info_t dev_info;
+
+    (void)argc;
+    (void)argv;
+
+    signal(SIGINT, sigint_handler);
+
+    /* 配置设备信息 */
+    memset(&dev_info, 0, sizeof(dev_info));
+    strncpy(dev_info.uuid, "urn:uuid:4be9e2dc-c615-4c41-8e71-1e9ad1f370a5",
+            sizeof(dev_info.uuid));
+    strncpy(dev_info.types, "dn:NetworkVideoTransmitter",
+            sizeof(dev_info.types));
+    strncpy(dev_info.scopes,
+            "onvif://www.onvif.org/type/video_encoder "
+            "onvif://www.onvif.org/type/audio_encoder "
+            "onvif://www.onvif.org/hardware/IPC-2000A "
+            "onvif://www.onvif.org/name/ExampleCorp-IPC "
+            "onvif://www.onvif.org/location/country/china",
+            sizeof(dev_info.scopes));
+    dev_info.metadata_version = 1;
+    dev_info.instance_id = 1;
+    dev_info.message_num = 1;
+
+    /* 初始化（假设本机IP为192.168.1.100，HTTP端口80） */
+    if (wsdd_server_init(&srv, &dev_info, "192.168.1.100", 80) < 0) {
+        fprintf(stderr, "Failed to init WS-Discovery server\n");
+        return 1;
+    }
+
+    printf("WS-Discovery server started on %s:%d\n", "192.168.1.100", 80);
+    printf("Press Ctrl+C to stop...\n");
+
+    while (g_running) {
+        wsdd_server_run_once(&srv, 1000);
+    }
+
+    printf("\nShutting down...\n");
+    wsdd_server_deinit(&srv);
+
+    return 0;
+}
+```
+
+**工程实践要点与常见坑点**：
+
+| 坑点 | 原因分析 | 解决方案 |
+|------|---------|---------|
+| **多播组加入失败** | 某些嵌入式Linux默认路由配置不允许多播 | 检查`route`配置，确保有默认网关或多播路由 |
+| **同一局域网多设备冲突** | 多个设备同时响应Probe，UDP包可能丢失 | 实现随机延迟（0~500ms）后再发送ProbeMatch |
+| **UUID不稳定** | 每次启动生成新UUID，客户端认为新设备 | 将UUID基于MAC地址派生并持久化存储 |
+| **防火墙拦截** | iptables默认丢弃3702端口UDP包 | 开发阶段关闭防火墙或放行3702端口 |
+| **IPv6双栈问题** | 同时监听IPv4/IPv6时地址解析复杂 | 优先实现IPv4，IPv6可选支持 |
+| **跨网段发现失败** | 多播TTL=1默认不跨路由器 | 如需跨网段，增大TTL或部署Discovery Proxy |
+| **ProbeMatch未及时发送** | 设备处理延迟导致客户端超时 | 确保ProbeMatch在收到Probe后1秒内发出 |
+| **MessageID重复** | 随机数种子相同导致UUID冲突 | 使用MAC地址+时间戳+随机数混合生成 |
+
+---
+
+### 5.11.4 核心服务详解
+
+ONVIF规范包含十余个服务（Service），每个服务定义了一组操作（Operation）。本节详细讲解嵌入式开发中最常用的六大核心服务。
+
+#### Device Management Service（设备管理服务）
+
+Device Service是所有ONVIF设备**必须实现**的基础服务。客户端通过此服务获取设备基本信息、能力集、网络配置等。端点URL为 `/onvif/device_service`。
+
+**核心操作速查表**：
+
+| 操作名称 | 功能描述 | 嵌入式实现复杂度 |
+|---------|---------|----------------|
+| `GetWsdlUrl` | 获取设备WSDL文档URL | 低 |
+| `GetServices` | 获取设备支持的所有服务列表 | 低 |
+| `GetServiceCapabilities` | 获取各服务能力 | 中 |
+| `GetDeviceInformation` | 获取厂商/型号/固件版本/序列号 | 低 |
+| `GetSystemDateAndTime` | 获取/设置系统时间（UTC/本地） | 中 |
+| `SetSystemDateAndTime` | 配置NTP、时区、夏令时 | 中 |
+| `GetCapabilities` | **最重要的操作**，获取设备所有能力 | 中 |
+| `GetHostname` / `SetHostname` | 主机名管理 | 低 |
+| `GetDNS` / `SetDNS` | DNS服务器配置 | 低 |
+| `GetNetworkInterfaces` / `SetNetworkInterfaces` | 网卡配置（IP/DHCP/MTU） | 高 |
+| `GetNetworkProtocols` / `SetNetworkProtocols` | 协议端口配置（HTTP/HTTPS/RTSP） | 中 |
+| `GetNetworkDefaultGateway` / `SetNetworkDefaultGateway` | 默认网关 | 低 |
+| `GetZeroConfiguration` / `SetZeroConfiguration` | Zeroconf/LLTD配置 | 低 |
+| `GetIPAddressFilter` / `SetIPAddressFilter` | IP访问白名单/黑名单 | 中 |
+| `GetSystemLog` / `GetSystemSupportInformation` | 系统日志/支持信息 | 中 |
+| `SystemReboot` | 设备重启 | 低 |
+| `RestoreSystem` / `GetSystemBackup` | 恢复出厂/备份配置 | 高 |
+| `StartFirmwareUpgrade` / `GetUpgradeStatus` | 固件升级 | 高 |
+| `SetSystemFactoryDefault` | 恢复出厂设置 | 中 |
+| `GetUsers` / `CreateUsers` / `DeleteUsers` / `SetUser` | 用户管理 | 中 |
+| `GetAccessPolicy` / `SetAccessPolicy` | 访问策略 | 中 |
+| `GetCertificates` / `CreateCertificate` / `DeleteCertificates` | TLS证书管理 | 高 |
+| `GetDot1XConfiguration` / `SetDot1XConfiguration` | 802.1X认证 | 高 |
+| `GetStorageConfiguration` / `SetStorageConfiguration` | 存储配置 | 中 |
+
+**GetCapabilities请求/响应示例**：
+
+此操作返回设备支持的所有服务能力，是客户端发现设备功能的第一步。
+
+```xml
+<!-- 请求：GetCapabilities -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+  <s:Body>
+    <tds:GetCapabilities>
+      <tds:Category>All</tds:Category>
+    </tds:GetCapabilities>
+  </s:Body>
+</s:Envelope>
+```
+
+```xml
+<!-- 响应：GetCapabilitiesResponse（简化版） -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
+            xmlns:tt="http://www.onvif.org/ver10/schema">
+  <s:Body>
+    <tds:GetCapabilitiesResponse>
+      <tds:Capabilities>
+        <!-- Analytics能力 -->
+        <tt:Analytics>
+          <tt:XAddr>http://192.168.1.100/onvif/analytics_service</tt:XAddr>
+          <tt:RuleSupport>true</tt:RuleSupport>
+          <tt:AnalyticsModuleSupport>true</tt:AnalyticsModuleSupport>
+        </tt:Analytics>
+        <!-- Device能力 -->
+        <tt:Device>
+          <tt:XAddr>http://192.168.1.100/onvif/device_service</tt:XAddr>
+          <tt:Network>
+            <tt:IPFilter>true</tt:IPFilter>
+            <tt:ZeroConfiguration>true</tt:ZeroConfiguration>
+            <tt:IPVersion6>false</tt:IPVersion6>
+            <tt:DynDNS>true</tt:DynDNS>
+          </tt:Network>
+          <tt:System>
+            <tt:DiscoveryResolve>false</tt:DiscoveryResolve>
+            <tt:DiscoveryBye>true</tt:DiscoveryBye>
+            <tt:RemoteDiscovery>true</tt:RemoteDiscovery>
+            <tt:SystemBackup>true</tt:SystemBackup>
+            <tt:SystemLogging>true</tt:SystemLogging>
+            <tt:FirmwareUpgrade>true</tt:FirmwareUpgrade>
+          </tt:System>
+        </tt:Device>
+        <!-- Event能力 -->
+        <tt:Events>
+          <tt:XAddr>http://192.168.1.100/onvif/event_service</tt:XAddr>
+          <tt:WSSubscriptionPolicySupport>true</tt:WSSubscriptionPolicySupport>
+          <tt:WSPullPointSupport>true</tt:WSPullPointSupport>
+        </tt:Events>
+        <!-- Imaging能力 -->
+        <tt:Imaging>
+          <tt:XAddr>http://192.168.1.100/onvif/imaging_service</tt:XAddr>
+        </tt:Imaging>
+        <!-- Media能力 -->
+        <tt:Media>
+          <tt:XAddr>http://192.168.1.100/onvif/media_service</tt:XAddr>
+          <tt:StreamingCapabilities>
+            <tt:RTPMulticast>true</tt:RTPMulticast>
+            <tt:RTP_TCP>true</tt:RTP_TCP>
+            <tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
+          </tt:StreamingCapabilities>
+        </tt:Media>
+        <!-- PTZ能力（仅云台设备） -->
+        <tt:PTZ>
+          <tt:XAddr>http://192.168.1.100/onvif/ptz_service</tt:XAddr>
+        </tt:PTZ>
+      </tds:Capabilities>
+    </tds:GetCapabilitiesResponse>
+  </s:Body>
+</s:Envelope>
+```
+
+**设备信息结构体定义（嵌入式实现）**：
+
+```c
+/* onvif_device_mgmt.h */
+#ifndef __ONVIF_DEVICE_MGMT_H__
+#define __ONVIF_DEVICE_MGMT_H__
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* 设备基本信息 */
+typedef struct {
+    char manufacturer[64];      /* 厂商名称 */
+    char model[64];             /* 型号 */
+    char firmware_version[64];  /* 固件版本 */
+    char serial_number[64];     /* 序列号 */
+    char hardware_id[64];       /* 硬件版本 */
+} onvif_device_info_t;
+
+/* 网络接口配置 */
+typedef struct {
+    char        name[32];       /* 接口名称，如 "eth0" */
+    bool        enabled;        /* 是否启用 */
+    bool        dhcp_enabled;   /* DHCP开关 */
+    char        ipv4_address[16];  /* IPv4地址 */
+    char        ipv4_netmask[16];  /* 子网掩码 */
+    char        ipv4_gateway[16];  /* 默认网关 */
+    char        mac_address[18];   /* MAC地址，如 "aa:bb:cc:dd:ee:ff" */
+    uint16_t    mtu;            /* MTU */
+} onvif_network_interface_t;
+
+/* DNS配置 */
+typedef struct {
+    bool        from_dhcp;      /* 是否从DHCP获取 */
+    char        ipv4_address[4][16];  /* 最多4个DNS服务器 */
+    int         ipv4_count;
+} onvif_dns_t;
+
+/* 协议端口配置 */
+typedef struct {
+    char        name[16];       /* HTTP / HTTPS / RTSP */
+    bool        enabled;
+    uint16_t    port;           /* 端口号 */
+} onvif_network_protocol_t;
+
+/* 用户权限级别 */
+typedef enum {
+    ONVIF_USER_LEVEL_ADMINISTRATOR = 0,
+    ONVIF_USER_LEVEL_OPERATOR    = 1,
+    ONVIF_USER_LEVEL_USER        = 2,
+    ONVIF_USER_LEVEL_ANONYMOUS   = 3,
+} onvif_user_level_t;
+
+/* 用户信息 */
+typedef struct {
+    char                username[64];
+    char                password[64];  /* 仅在创建/修改时使用 */
+    onvif_user_level_t  level;
+} onvif_user_t;
+
+/* 能力集结构 */
+typedef struct {
+    bool    has_analytics;
+    bool    has_device;
+    bool    has_events;
+    bool    has_imaging;
+    bool    has_media;
+    bool    has_media2;
+    bool    has_ptz;
+    bool    has_recording;
+    bool    has_search;
+    bool    has_replay;
+    bool    has_receiver;
+    bool    has_display;
+    bool    has_deviceio;
+    bool    has_thermal;
+    bool    has_accesscontrol;
+    bool    has_doorcontrol;
+    /* 各服务的XAddrs URL */
+    char    analytics_xaddr[256];
+    char    device_xaddr[256];
+    char    event_xaddr[256];
+    char    imaging_xaddr[256];
+    char    media_xaddr[256];
+    char    media2_xaddr[256];
+    char    ptz_xaddr[256];
+} onvif_capabilities_t;
+
+/* Device Management API */
+int onvif_dev_get_device_information(onvif_device_info_t *info);
+int onvif_dev_get_system_date_and_time(int *utc_offset_min, bool *dst_enabled);
+int onvif_dev_set_system_date_and_time(int utc_offset_min, bool dst_enabled,
+                                        const char *ntp_server);
+int onvif_dev_get_capabilities(onvif_capabilities_t *caps);
+int onvif_dev_get_network_interfaces(onvif_network_interface_t *ifaces,
+                                      int max_count, int *out_count);
+int onvif_dev_set_network_interface(const onvif_network_interface_t *iface);
+int onvif_dev_get_dns(onvif_dns_t *dns);
+int onvif_dev_set_dns(const onvif_dns_t *dns);
+int onvif_dev_get_network_protocols(onvif_network_protocol_t *protocols,
+                                     int max_count, int *out_count);
+int onvif_dev_system_reboot(void);
+int onvif_dev_restore_factory_default(bool keep_network);
+int onvif_dev_get_users(onvif_user_t *users, int max_count, int *out_count);
+int onvif_dev_create_user(const onvif_user_t *user);
+int onvif_dev_delete_user(const char *username);
+
+#endif /* __ONVIF_DEVICE_MGMT_H__ */
+```
+
+#### Media Service / Media2 Service（媒体服务）
+
+Media Service是ONVIF协议中使用频率最高的服务，负责视频流、音频流和元数据流的配置与管理。需要特别注意：**ONVIF Media Service只负责"配置和管理"，实际的音视频传输由RTSP/RTP完成**（参见5.2/5.3章节）。
+
+**核心概念层级**：
+
+```
+Profile（配置文件）
+  ├── VideoSourceConfiguration（视频源配置：分辨率、采集区域）
+  ├── VideoEncoderConfiguration（视频编码配置：编码格式、码率、帧率、GOP）
+  ├── AudioSourceConfiguration（音频源配置）
+  ├── AudioEncoderConfiguration（音频编码配置：G.711/AAC）
+  ├── PTZConfiguration（PTZ配置，可选）
+  ├── VideoAnalyticsConfiguration（分析配置，可选）
+  └── MetadataConfiguration（元数据配置，可选）
+```
+
+**Media Service核心操作**：
+
+| 操作名称 | 功能描述 | 与RTSP/RTP的关系 |
+|---------|---------|-----------------|
+| `GetProfiles` | 获取所有可用Profile | Profile包含编码参数 |
+| `GetProfile` | 获取指定Profile详细信息 | - |
+| `CreateProfile` / `DeleteProfile` | 创建/删除Profile | - |
+| `GetVideoSources` | 获取物理视频源 | 对应传感器/采集通道 |
+| `GetVideoSourceConfigurations` | 获取视频源配置列表 | 分辨率、裁剪区域 |
+| `GetVideoEncoderConfigurations` | 获取编码器配置 | H.264/H.265参数 |
+| `GetVideoEncoderConfigurationOptions` | 获取编码参数范围 | 支持的码率/分辨率范围 |
+| `SetVideoEncoderConfiguration` | 设置编码参数 | 修改后需重启RTSP流 |
+| `GetStreamUri` | **获取RTSP流地址** | 返回`rtsp://...` URL |
+| `GetSnapshotUri` | 获取JPEG快照地址 | HTTP GET即可获取 |
+| `GetAudioSources` | 获取音频源 | 麦克风/Line-in |
+| `GetAudioEncoderConfigurations` | 获取音频编码配置 | G.711/AAC |
+| `GetCompatibleVideoEncoderConfigurations` | 获取Profile兼容的编码配置 | - |
+| `AddVideoEncoderConfiguration` / `Remove...` | 向Profile添加/移除配置 | - |
+| `StartMulticastStreaming` / `StopMulticastStreaming` | 启停组播流 | 控制RTP多播 |
+| `GetOSDs` / `SetOSD` / `CreateOSD` / `DeleteOSD` | OSD叠加管理 | 时间/文字/Logo叠加 |
+
+**GetStreamUri请求/响应示例**：
+
+```xml
+<!-- 请求 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
+  <s:Body>
+    <trt:GetStreamUri>
+      <trt:StreamSetup>
+        <trt:Stream>RTP-Unicast</trt:Stream>
+        <trt:Transport>
+          <tt:Protocol>RTSP</tt:Protocol>
+          <!-- 可选: <tt:Tunnel> -->
+        </trt:Transport>
+      </trt:StreamSetup>
+      <trt:ProfileToken>Profile_1</trt:ProfileToken>
+    </trt:GetStreamUri>
+  </s:Body>
+</s:Envelope>
+```
+
+```xml
+<!-- 响应 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
+  <s:Body>
+    <trt:GetStreamUriResponse>
+      <trt:MediaUri>
+        <tt:Uri>rtsp://192.168.1.100:554/stream1</tt:Uri>
+        <tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>
+        <tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>
+        <tt:Timeout>PT0S</tt:Timeout>
+      </trt:MediaUri>
+    </trt:GetStreamUriResponse>
+  </s:Body>
+</s:Envelope>
+```
+
+**StreamSetup参数详解**：
+
+| 参数 | 可选值 | 说明 |
+|------|--------|------|
+| `Stream` | `RTP-Unicast` / `RTP-Multicast` | 单播或组播 |
+| `Transport/Protocol` | `UDP` / `TCP` / `RTSP` | 传输协议 |
+
+- `UDP`：RTP over UDP（默认，实时性最好但可能丢包）
+- `TCP`：RTP over RTSP-interleaved（TCP通道内传输，防火墙友好）
+- `RTSP`：由设备决定最佳方式
+
+**VideoEncoderConfiguration关键参数**：
+
+| 参数 | 数据类型 | 说明 | 典型值 |
+|------|---------|------|--------|
+| `Encoding` | string | 编码格式 | `H264` / `H265` / `JPEG` / `MPEG4` |
+| `Resolution/Width` | int | 视频宽度 | 1920, 2560, 3840 |
+| `Resolution/Height` | int | 视频高度 | 1080, 1440, 2160 |
+| `Quality` | float | 质量因子 | 1.0~10.0 |
+| `RateControl/FrameRateLimit` | float | 最大帧率 | 25, 30, 60 |
+| `RateControl/BitrateLimit` | int | 最大码率(kbps) | 4096, 8192, 16384 |
+| `RateControl/EncodingInterval` | int | GOP大小（帧间隔）| 25, 30, 50 |
+| `H264/GovLength` | int | H.264 GOP长度 | 同EncodingInterval |
+| `H264/H264Profile` | string | H.264档次 | `Baseline` / `Main` / `High` / `Extended` |
+| `H265/GovLength` | int | H.265 GOP长度 | - |
+| `H265/Profile` | string | H.265档次 | `Main` / `Main10` |
+| `H265/Level` | string | H.265级别 | `Level1` ~ `Level6.2` |
+| `Multicast/Address` | IPAddress | 组播地址 | 239.x.x.x |
+| `Multicast/Port` | int | 组播端口 | 标准RTP端口 |
+| `SessionTimeout` | duration | RTSP会话超时 | `PT60S` = 60秒 |
+
+**Media2 Service改进**：
+
+Media2（ver20）是对Media Service（ver10）的重大升级，主要改进：
+
+| 特性 | Media (ver10) | Media2 (ver20) | 意义 |
+|------|---------------|----------------|------|
+| H.265/HEVC支持 | 不支持 | 原生支持 | 4K/8K时代必需 |
+| AV1支持 | 不支持 | 部分Profile支持 | 下一代开源编码 |
+| 编码配置灵活性 | Profile绑定EncoderConfiguration | 更灵活的Configuration分配 | 多码流更易配置 |
+| 视频源配置 | 简单 | 支持ROI（感兴趣区域） | 智能分析区域配置 |
+| 音频配置 | G.711/G.726/AAC | 扩展更多编码 | 更丰富的音频支持 |
+| Analytics配置 | 部分支持 | 更强的Analytics集成 | AI分析配置 |
+| 服务URL | `/onvif/media_service` | `/onvif/media2_service` | 独立端点 |
+
+**嵌入式Media Service实现要点**：
+
+```c
+/* onvif_media.h */
+#ifndef __ONVIF_MEDIA_H__
+#define __ONVIF_MEDIA_H__
+
+/* Profile Token（标识符） */
+typedef char onvif_profile_token_t[64];
+
+/* 视频编码格式 */
+typedef enum {
+    ONVIF_ENCODING_H264,
+    ONVIF_ENCODING_H265,
+    ONVIF_ENCODING_JPEG,
+    ONVIF_ENCODING_MPEG4,
+} onvif_video_encoding_t;
+
+/* 分辨率 */
+typedef struct {
+    int width;
+    int height;
+} onvif_resolution_t;
+
+/* 码率控制 */
+typedef struct {
+    float   frame_rate_limit;   /* 最大帧率 */
+    int     bitrate_limit;      /* 最大码率(kbps) */
+    int     encoding_interval;  /* GOP长度 */
+} onvif_rate_control_t;
+
+/* H.264具体配置 */
+typedef struct {
+    int     gov_length;         /* GOP长度 */
+    char    h264_profile[16]; /* "Baseline"/"Main"/"High"/"Extended" */
+} onvif_h264_config_t;
+
+/* H.265具体配置 */
+typedef struct {
+    int     gov_length;
+    char    h265_profile[16]; /* "Main"/"Main10" */
+    char    h265_level[16];   /* "Level1"~"Level6.2" */
+    int     tile_width;
+    int     tile_height;
+} onvif_h265_config_t;
+
+/* 视频编码器配置 */
+typedef struct {
+    char                    token[64];
+    char                    name[64];
+    onvif_video_encoding_t  encoding;
+    onvif_resolution_t      resolution;
+    float                   quality;
+    onvif_rate_control_t    rate_control;
+    union {
+        onvif_h264_config_t h264;
+        onvif_h265_config_t h265;
+    } codec;
+    bool                    multicast_enabled;
+    char                    session_timeout[32]; /* ISO 8601 duration */
+} onvif_video_encoder_config_t;
+
+/* 视频源配置 */
+typedef struct {
+    char    token[64];
+    char    source_token[64];  /* 关联的物理源 */
+    char    name[64];
+    int     bounds_x;
+    int     bounds_y;
+    int     bounds_width;
+    int     bounds_height;
+} onvif_video_source_config_t;
+
+/* Profile结构 */
+typedef struct {
+    onvif_profile_token_t   token;
+    char                    name[64];
+    bool                    fixed;  /* 是否可删除 */
+    /* 关联的配置Token */
+    char                    video_source_config_token[64];
+    char                    video_encoder_config_token[64];
+    char                    audio_source_config_token[64];
+    char                    audio_encoder_config_token[64];
+    char                    ptz_config_token[64];
+    char                    analytics_config_token[64];
+    char                    metadata_config_token[64];
+} onvif_profile_t;
+
+/* 媒体流URI */
+typedef struct {
+    char    uri[512];           /* rtsp://... */
+    bool    invalid_after_connect;
+    bool    invalid_after_reboot;
+    char    timeout[32];        /* ISO 8601 duration */
+} onvif_media_uri_t;
+
+/* Media Service API */
+int onvif_media_get_profiles(onvif_profile_t *profiles,
+                              int max_count, int *out_count);
+int onvif_media_get_profile(const char *token, onvif_profile_t *profile);
+int onvif_media_get_video_sources(/* ... */);
+int onvif_media_get_video_encoder_configs(onvif_video_encoder_config_t *configs,
+                                           int max_count, int *out_count);
+int onvif_media_get_video_encoder_config(const char *token,
+                                          onvif_video_encoder_config_t *config);
+int onvif_media_set_video_encoder_config(const onvif_video_encoder_config_t *config);
+int onvif_media_get_stream_uri(const char *profile_token,
+                                const char *stream_type,  /* "RTP-Unicast"/"RTP-Multicast" */
+                                const char *transport,    /* "UDP"/"TCP"/"RTSP" */
+                                onvif_media_uri_t *uri);
+int onvif_media_get_snapshot_uri(const char *profile_token,
+                                  onvif_media_uri_t *uri);
+
+/* Media2 Service API（如果支持） */
+int onvif_media2_get_profiles(onvif_profile_t *profiles,
+                               int max_count, int *out_count);
+int onvif_media2_get_video_encoder_instances(/* H.265配置 */);
+
+#endif /* __ONVIF_MEDIA_H__ */
+```
+
+**重要实现提示**：GetStreamUri返回的RTSP URL必须与设备内嵌的RTSP Server实际提供的一致。常见的实现模式是ONVIF协议层调用RTSP Server的内部API获取URL，而非自行构造。
+
+#### PTZ Service（云台控制服务）
+
+PTZ（Pan/Tilt/Zoom）Service控制支持云台的网络摄像机。仅PTZ设备需要实现此服务。
+
+**PTZ核心概念**：
+
+```
+PTZ Service 概念层级
+├── PTZNode（云台节点）
+│   ├── NameSpace URI（速度空间定义）
+│   ├── 支持的移动方式：Absolute/Relative/Continuous
+│   ├── 支持的PTZ空间：Pan/Tilt/Zoom/DigitalZoom
+│   └── 数字变焦限制
+├── PTZConfiguration（PTZ配置）
+│   ├── 关联的PTZNode
+│   ├── 默认Absolute/Relative/Continuous移动空间
+│   ├── 默认速度/超时
+│   └── 关联的VideoSource
+├── Preset（预置位）
+│   ├── Token（唯一标识）
+│   ├── Name（用户可读名称）
+│   ├── PTZPosition（位置坐标）
+│   └── 图像Token（关联视频配置）
+└── HomePosition（原点位置）
+```
+
+**PTZ Service核心操作**：
+
+| 操作 | 功能 | 参数要点 |
+|------|------|---------|
+| `GetNodes` | 获取PTZ节点能力 | 返回节点支持的移动方式 |
+| `GetNode` | 获取单个节点 | - |
+| `GetConfigurations` | 获取PTZ配置 | - |
+| `GetConfiguration` | 获取单个配置 | - |
+| `GetConfigurationOptions` | 获取配置选项范围 | 速度范围、空间URI |
+| `SetConfiguration` | 设置PTZ配置 | - |
+| `AbsoluteMove` | 绝对位置移动 | `Position` + `Speed`（可选） |
+| `RelativeMove` | 相对位移移动 | `Translation` + `Speed` |
+| `ContinuousMove` | 连续移动 | `Velocity`（速度向量） |
+| `Stop` | 停止移动 | `PanTilt` + `Zoom` 标志 |
+| `GetPresets` | 获取预置位列表 | 按ProfileToken过滤 |
+| `SetPreset` | 保存当前位置为预置位 | `PresetToken`（更新）/ `PresetName`（新建） |
+| `RemovePreset` | 删除预置位 | `PresetToken` |
+| `GotoPreset` | 移动到预置位 | `PresetToken` + `Speed` |
+| `GotoHomePosition` | 移动到原点 | `Speed`（可选） |
+| `SetHomePosition` | 设置当前位置为原点 | - |
+| `GetStatus` | 获取当前PTZ状态 | 返回当前Position和MoveStatus |
+
+**PTZ速度空间（Space）详解**：
+
+ONVIF使用"空间"（Space）概念来抽象不同厂商的PTZ坐标系统。定义了三种标准空间：
+
+| 空间类型 | URI | 坐标范围 | 说明 |
+|---------|-----|---------|------|
+| **Absolute Pan/Tilt** | `http://www.onvif.org/ver10/tptz/PanTiltSpaces/PositionGenericSpace` | [-1.0, 1.0] | 归一化绝对位置 |
+| **Absolute Zoom** | `http://www.onvif.org/ver10/tptz/ZoomSpaces/PositionGenericSpace` | [0.0, 1.0] | 归一化变焦位置 |
+| **Relative Pan/Tilt** | `http://www.onvif.org/ver10/tptz/PanTiltSpaces/TranslationGenericSpace` | [-1.0, 1.0] | 归一化相对位移 |
+| **Relative Zoom** | `http://www.onvif.org/ver10/tptz/ZoomSpaces/TranslationGenericSpace` | [-1.0, 1.0] | 归一化变焦位移 |
+| **Continuous Pan/Tilt** | `http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace` | [-1.0, 1.0] | 归一化速度 |
+| **Continuous Zoom** | `http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace` | [-1.0, 1.0] | 归一化变焦速度 |
+| **Speed Generic** | `http://www.onvif.org/ver10/tptz/PanTiltSpaces/GenericSpeedSpace` | [0.0, 1.0] | 归一化速度比例 |
+
+**AbsoluteMove请求示例**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl"
+            xmlns:tt="http://www.onvif.org/ver10/schema">
+  <s:Body>
+    <tptz:AbsoluteMove>
+      <tptz:ProfileToken>Profile_1</tptz:ProfileToken>
+      <tptz:Position>
+        <tt:PanTilt x="0.5" y="-0.3"
+          space="http://www.onvif.org/ver10/tptz/PanTiltSpaces/PositionGenericSpace"/>
+        <tt:Zoom x="0.7"
+          space="http://www.onvif.org/ver10/tptz/ZoomSpaces/PositionGenericSpace"/>
+      </tptz:Position>
+      <tptz:Speed>
+        <tt:PanTilt x="0.5" y="0.5"
+          space="http://www.onvif.org/ver10/tptz/PanTiltSpaces/GenericSpeedSpace"/>
+        <tt:Zoom x="0.5"
+          space="http://www.onvif.org/ver10/tptz/ZoomSpaces/GenericSpeedSpace"/>
+      </tptz:Speed>
+    </tptz:AbsoluteMove>
+  </s:Body>
+</s:Envelope>
+```
+
+**ContinuousMove请求示例**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl"
+            xmlns:tt="http://www.onvif.org/ver10/schema">
+  <s:Body>
+    <tptz:ContinuousMove>
+      <tptz:ProfileToken>Profile_1</tptz:ProfileToken>
+      <tptz:Velocity>
+        <tt:PanTilt x="0.5" y="0.0"
+          space="http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace"/>
+        <tt:Zoom x="0.0"
+          space="http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace"/>
+      </tptz:Velocity>
+      <tptz:Timeout>PT5S</tptz:Timeout>
+    </tptz:ContinuousMove>
+  </s:Body>
+</s:Envelope>
+```
+
+**嵌入式PTZ控制实现要点**：
+
+```c
+/* onvif_ptz.h */
+#ifndef __ONVIF_PTZ_H__
+#define __ONVIF_PTZ_H__
+
+#include <stdbool.h>
+
+/* 归一化PTZ位置/速度 */
+typedef struct {
+    float pan;   /* -1.0 ~ 1.0，水平角度 */
+    float tilt;  /* -1.0 ~ 1.0，垂直角度 */
+    float zoom;  /* 0.0 ~ 1.0，变焦倍数 */
+} onvif_ptz_vector_t;
+
+/* PTZ移动状态 */
+typedef enum {
+    ONVIF_PTZ_MOVE_IDLE,
+    ONVIF_PTZ_MOVE_MOVING,
+    ONVIF_PTZ_MOVE_UNKNOWN,
+} onvif_ptz_move_status_t;
+
+/* PTZ状态 */
+typedef struct {
+    onvif_ptz_vector_t      position;
+    onvif_ptz_move_status_t pan_tilt_status;
+    onvif_ptz_move_status_t zoom_status;
+    char                    error_msg[256];  /* 非空表示有错误 */
+    char                    utc_time[32];
+} onvif_ptz_status_t;
+
+/* 预置位 */
+typedef struct {
+    char    token[64];
+    char    name[64];
+    onvif_ptz_vector_t position;
+} onvif_preset_t;
+
+/* PTZ节点能力 */
+typedef struct {
+    char    token[64];
+    char    name[64];
+    bool    absolute_pan_tilt;
+    bool    absolute_zoom;
+    bool    relative_pan_tilt;
+    bool    relative_zoom;
+    bool    continuous_pan_tilt;
+    bool    continuous_zoom;
+    bool    digital_zoom;
+    int     max_presets;        /* 最大预置位数量 */
+} onvif_ptz_node_t;
+
+/* PTZ Service API */
+int onvif_ptz_get_nodes(onvif_ptz_node_t *nodes, int max_count, int *out_count);
+int onvif_ptz_get_configurations(/* ... */);
+int onvif_ptz_absolute_move(const char *profile_token,
+                             const onvif_ptz_vector_t *position,
+                             const onvif_ptz_vector_t *speed);
+int onvif_ptz_relative_move(const char *profile_token,
+                             const onvif_ptz_vector_t *translation,
+                             const onvif_ptz_vector_t *speed);
+int onvif_ptz_continuous_move(const char *profile_token,
+                                 const onvif_ptz_vector_t *velocity,
+                                 int timeout_sec);
+int onvif_ptz_stop(const char *profile_token, bool stop_pan_tilt, bool stop_zoom);
+int onvif_ptz_get_presets(const char *profile_token,
+                           onvif_preset_t *presets, int max_count, int *out_count);
+int onvif_ptz_goto_preset(const char *profile_token,
+                           const char *preset_token,
+                           const onvif_ptz_vector_t *speed);
+int onvif_ptz_set_preset(const char *profile_token,
+                          const char *preset_token,  /* NULL=新建 */
+                          const char *preset_name,
+                          char *out_preset_token, size_t out_token_len);
+int onvif_ptz_remove_preset(const char *profile_token, const char *preset_token);
+int onvif_ptz_goto_home(const char *profile_token,
+                         const onvif_ptz_vector_t *speed);
+int onvif_ptz_set_home(const char *profile_token);
+int onvif_ptz_get_status(const char *profile_token, onvif_ptz_status_t *status);
+
+#endif /* __ONVIF_PTZ_H__ */
+```
+
+**PTZ归一化坐标与物理坐标转换**：
+
+```c
+/* 将ONVIF归一化坐标转换为云台物理角度 */
+static void onvif_to_physical_pan_tilt(float onvif_pan, float onvif_tilt,
+                                        float *physical_pan_deg,
+                                        float *physical_tilt_deg)
+{
+    /* 假设云台物理范围：Pan [-180, 180]度，Tilt [-90, 90]度 */
+    const float PAN_MIN_DEG  = -180.0f;
+    const float PAN_MAX_DEG  = 180.0f;
+    const float TILT_MIN_DEG = -90.0f;
+    const float TILT_MAX_DEG = 90.0f;
+
+    /* ONVIF归一化：-1.0 = 最小物理值，1.0 = 最大物理值，0 = 中间 */
+    *physical_pan_deg  = onvif_pan  * (PAN_MAX_DEG - PAN_MIN_DEG) / 2.0f
+                         + (PAN_MAX_DEG + PAN_MIN_DEG) / 2.0f;
+    *physical_tilt_deg = onvif_tilt * (TILT_MAX_DEG - TILT_MIN_DEG) / 2.0f
+                         + (TILT_MAX_DEG + TILT_MIN_DEG) / 2.0f;
+}
+
+/* 将物理角度转换为ONVIF归一化坐标 */
+static void physical_to_onvif_pan_tilt(float physical_pan_deg,
+                                        float physical_tilt_deg,
+                                        float *onvif_pan,
+                                        float *onvif_tilt)
+{
+    const float PAN_MIN_DEG  = -180.0f;
+    const float PAN_MAX_DEG  = 180.0f;
+    const float TILT_MIN_DEG = -90.0f;
+    const float TILT_MAX_DEG = 90.0f;
+
+    *onvif_pan  = (2.0f * physical_pan_deg - PAN_MAX_DEG - PAN_MIN_DEG)
+                  / (PAN_MAX_DEG - PAN_MIN_DEG);
+    *onvif_tilt = (2.0f * physical_tilt_deg - TILT_MAX_DEG - TILT_MIN_DEG)
+                  / (TILT_MAX_DEG - TILT_MIN_DEG);
+
+    /* 钳位到 [-1.0, 1.0] */
+    if (*onvif_pan < -1.0f) *onvif_pan = -1.0f;
+    if (*onvif_pan > 1.0f)  *onvif_pan = 1.0f;
+    if (*onvif_tilt < -1.0f) *onvif_tilt = -1.0f;
+    if (*onvif_tilt > 1.0f)  *onvif_tilt = 1.0f;
+}
+```
+
+#### Imaging Service（图像设置服务）
+
+Imaging Service控制视频图像的ISP（图像信号处理）参数，包括亮度、对比度、饱和度、白平衡、聚焦、光圈等。
+
+**Imaging Service核心操作**：
+
+| 操作 | 功能 | 典型参数 |
+|------|------|---------|
+| `GetImagingSettings` | 获取图像参数 | Brightness/Contrast/ColorSaturation/Sharpness |
+| `SetImagingSettings` | 设置图像参数 | 同上 |
+| `GetOptions` | 获取参数范围 | 各参数的最小/最大值 |
+| `GetStatus` | 获取当前状态 | 聚焦状态/光圈状态 |
+| `GetMoveOptions` | 获取聚焦移动选项 | 连续/绝对/相对 |
+| `Move` | 执行聚焦/光圈移动 | Focus/Iris移动参数 |
+| `Stop` | 停止聚焦/光圈移动 | - |
+| `GetCurrentPreset` | 获取当前图像预设 | 预设Token |
+| `SetCurrentPreset` | 应用图像预设 | 预设Token |
+
+**ImagingSettings关键参数**：
+
+| 参数 | 范围 | 说明 |
+|------|------|------|
+| `Brightness` | [-100, 100] 或 [0.0, 255.0] | 亮度 |
+| `ColorSaturation` | [0.0, 100.0] 或 [0.0, 255.0] | 饱和度 |
+| `Contrast` | [0.0, 100.0] 或 [0.0, 255.0] | 对比度 |
+| `Sharpness` | [0.0, 100.0] | 锐度 |
+| `BacklightCompensation/Mode` | `OFF` / `ON` | 背光补偿开关 |
+| `BacklightCompensation/Level` | [0.0, 100.0] | 背光补偿强度 |
+| `Exposure/Mode` | `AUTO` / `MANUAL` | 曝光模式 |
+| `Exposure/Priority` | `LowNoise` / `FrameRate` | 曝光优先级 |
+| `Exposure/MinExposureTime` | 微秒 | 最小曝光时间 |
+| `Exposure/MaxExposureTime` | 微秒 | 最大曝光时间 |
+| `Exposure/ExposureTime` | 微秒 | 当前曝光时间（手动模式）|
+| `Exposure/Gain` | [0.0, 100.0] | 增益 |
+| `Focus/AutoFocusMode` | `AUTO` / `MANUAL` | 自动/手动聚焦 |
+| `Focus/DefaultSpeed` | [0.0, 1.0] | 聚焦速度 |
+| `Focus/NearLimit` / `FarLimit` | 距离值 | 聚焦范围限制 |
+| `WhiteBalance/Mode` | `AUTO` / `MANUAL` | 白平衡模式 |
+| `WhiteBalance/CrGain` / `CbGain` | [0.0, 100.0] | 红/蓝增益（手动模式）|
+| `IrCutFilter` | `AUTO` / `ON` / `OFF` / `EXTENDED` | 红外滤光片模式 |
+| `WideDynamicRange/Mode` | `OFF` / `ON` | 宽动态开关 |
+| `WideDynamicRange/Level` | [0.0, 100.0] | 宽动态强度 |
+| `WhiteBalance/IrCutFilterAutoAdjustment` | - | 红外切换阈值 |
+| `ToneCompensation/Mode` | `OFF` / `ON` | 色调补偿 |
+| `Defogging/Mode` | `OFF` / `ON` | 透雾模式 |
+| `NoiseReduction/Level` | [0.0, 100.0] | 降噪强度 |
+| `ImageStabilization/Mode` | `OFF` / `ON` / `AUTO` | 电子防抖 |
+
+**IrCutFilter模式详解**：
+
+| 模式 | 行为 | 适用场景 |
+|------|------|---------|
+| `AUTO` | 根据环境光自动切换 | 日夜两用场景 |
+| `ON` | 强制开启（过滤红外，白天模式） | 白天避免红外干扰 |
+| `OFF` | 强制关闭（允许红外通过，夜晚模式） | 低照度红外增强 |
+| `EXTENDED` | 扩展模式（设备自定义） | 特殊场景 |
+
+**嵌入式ISP控制注意事项**：
+
+1. **参数持久化**：图像参数应在设备重启后保持，需写入Flash/文件系统
+2. **参数联动**：某些参数互相影响（如宽动态与降噪），ISP pipeline需要协调
+3. **自动模式优先级**：当Exposure/Focus/WhiteBalance设置为AUTO时，手动设置的值应被忽略
+4. **版本兼容性**：ONVIF Imaging ver20增加了更多参数，需根据设备能力返回
+
+#### Event Service（事件服务）
+
+Event Service实现设备到客户端的事件通知机制，支持运动检测、视频丢失、遮挡报警、视频分析规则触发等事件。
+
+**Event Service核心机制**：
+
+```
+事件通知模式对比
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Pull-Point（拉模式，最常用）                                   │
+│    客户端创建PullPoint订阅，然后定期PullMessages获取事件           │
+│    优点：客户端控制节奏，防火墙友好                                 │
+│    缺点：实时性取决于轮询间隔                                       │
+├─────────────────────────────────────────────────────────────────┤
+│ 2. Push（推模式，WS-Notification）                                │
+│    客户端订阅后，设备通过HTTP POST主动推送事件到客户端URL           │
+│    优点：实时性最好                                                 │
+│    缺点：需要客户端有公网可访问URL，穿透NAT复杂                     │
+├─────────────────────────────────────────────────────────────────┤
+│ 3. Basic Notification（基础通知）                                │
+│    通过WS-BaseNotification实现的简单通知                           │
+│    优点：标准兼容性好                                               │
+│    缺点：功能较简单                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Event Service核心操作**：
+
+| 操作 | 功能 | 说明 |
+|------|------|------|
+| `GetEventProperties` | 获取事件属性 | 返回支持的事件类型 |
+| `CreatePullPointSubscription` | 创建PullPoint订阅 | 最重要的订阅操作 |
+| `PullMessages` | 拉取事件消息 | 带超时等待 |
+| `Renew` | 续订订阅 | 延长订阅有效期 |
+| `Unsubscribe` | 取消订阅 | 释放资源 |
+| `Subscribe` | 创建Push订阅 | 需要NotificationConsumer URL |
+| `GetServiceCapabilities` | 获取事件服务能力 | 支持的模式/最大订阅数 |
+| `SetSynchronizationPoint` | 设置同步点 | 触发设备发送当前状态 |
+| `GetCurrentMessage` | 获取当前消息 | 特定Topic的当前状态 |
+
+**常见ONVIF事件Topic**：
+
+| Topic | 说明 | 触发条件 |
+|-------|------|---------|
+| `tns1:VideoSource/MotionAlarm` | 运动检测报警 | 画面中有运动 |
+| `tns1:VideoSource/ImageTooBlurry` | 图像过模糊 | 失焦/镜头脏污 |
+| `tns1:VideoSource/ImageTooDark` | 图像过暗 | 曝光不足 |
+| `tns1:VideoSource/ImageTooBright` | 图像过亮 | 曝光过度 |
+| `tns1:VideoSource/GlobalSceneChange` | 场景变化 | 镜头被遮挡/大幅变化 |
+| `tns1:VideoSource/Tampering` | 篡改检测 | 镜头被遮挡/喷涂 |
+| `tns1:VideoSource/VideoLoss` | 视频丢失 | 编码器故障/信号中断 |
+| `tns1:VideoAnalytics/MotionDetection` | 视频分析-运动检测 | 分析引擎检测到运动 |
+| `tns1:VideoAnalytics/LineDetector` | 越线检测 | 物体穿越警戒线 |
+| `tns1:VideoAnalytics/FieldDetector` | 区域入侵检测 | 物体进入/离开区域 |
+| `tns1:Device/Trigger/DigitalInput` | 数字输入触发 | IO端口状态变化 |
+| `tns1:Device/Trigger/Relay` | 继电器触发 | 继电器输出变化 |
+| `tns1:AudioAnalytics/AudioAlarm` | 音频分析报警 | 玻璃破碎/尖叫等 |
+| `tns1:RuleEngine/...` | 规则引擎事件 | 用户配置的规则触发 |
+| `tns1:RecordingConfig/...` | 录像配置事件 | 录像状态变化 |
+
+**PullMessages请求/响应示例**：
+
+```xml
+<!-- CreatePullPointSubscription请求 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tev="http://www.onvif.org/ver10/events/wsdl"
+            xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2">
+  <s:Body>
+    <tev:CreatePullPointSubscription>
+      <tev:Filter>
+        <wsnt:TopicExpression Dialect="http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet">
+          tns1:VideoSource/MotionAlarm
+        </wsnt:TopicExpression>
+      </tev:Filter>
+      <tev:InitialTerminationTime>PT1H</tev:InitialTerminationTime>
+    </tev:CreatePullPointSubscription>
+  </s:Body>
+</s:Envelope>
+```
+
+```xml
+<!-- CreatePullPointSubscription响应（含SubscriptionReference） -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tev="http://www.onvif.org/ver10/events/wsdl"
+            xmlns:wsa="http://www.w3.org/2005/08/addressing">
+  <s:Body>
+    <tev:CreatePullPointSubscriptionResponse>
+      <tev:SubscriptionReference>
+        <wsa:Address>
+          http://192.168.1.100/onvif/event_service/PullSubManager_20231001_001
+        </wsa:Address>
+      </tev:SubscriptionReference>
+      <tev:CurrentTime>2023-10-01T12:00:00Z</tev:CurrentTime>
+      <tev:TerminationTime>2023-10-01T13:00:00Z</tev:TerminationTime>
+    </tev:CreatePullPointSubscriptionResponse>
+  </s:Body>
+</s:Envelope>
+```
+
+```xml
+<!-- PullMessages请求 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2"
+            xmlns:wsa="http://www.w3.org/2005/08/addressing">
+  <s:Header>
+    <wsa:To>
+      http://192.168.1.100/onvif/event_service/PullSubManager_20231001_001
+    </wsa:To>
+    <wsa:Action>
+      http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest
+    </wsa:Action>
+  </s:Header>
+  <s:Body>
+    <wsnt:PullMessages>
+      <wsnt:Timeout>PT10S</wsnt:Timeout>
+      <wsnt:MessageLimit>100</wsnt:MessageLimit>
+    </wsnt:PullMessages>
+  </s:Body>
+</s:Envelope>
+```
+
+```xml
+<!-- PullMessages响应（含MotionAlarm事件） -->
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2"
+            xmlns:tt="http://www.onvif.org/ver10/schema">
+  <s:Body>
+    <wsnt:PullMessagesResponse>
+      <wsnt:CurrentTime>2023-10-01T12:00:15Z</wsnt:CurrentTime>
+      <wsnt:TerminationTime>2023-10-01T13:00:00Z</wsnt:TerminationTime>
+      <wsnt:NotificationMessage>
+        <wsnt:Topic Dialect="http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet">
+          tns1:VideoSource/MotionAlarm
+        </wsnt:Topic>
+        <wsnt:Message>
+          <tt:Message UtcTime="2023-10-01T12:00:12Z" PropertyOperation="Changed">
+            <tt:Source>
+              <tt:SimpleItem Name="Source" Value="VideoSource_1"/>
+            </tt:Source>
+            <tt:Data>
+              <tt:SimpleItem Name="State" Value="true"/>
+            </tt:Data>
+          </tt:Message>
+        </wsnt:Message>
+      </wsnt:NotificationMessage>
+    </wsnt:PullMessagesResponse>
+  </s:Body>
+</s:Envelope>
+```
+
+**嵌入式Event实现要点**：
+
+1. **订阅管理**：需要维护PullPoint订阅列表（最大订阅数通常有限制，如10个）
+2. **事件队列**：每个订阅需要有独立的消息队列，实现FIFO缓存
+3. **超时处理**：PullMessages的超时（Timeout）需要精确实现，避免客户端阻塞
+4. **Topic过滤**：根据订阅时指定的Topic过滤事件，不推送无关事件
+5. **状态持久化**：MotionAlarm等状态类事件需要在订阅创建时发送当前状态
+
+#### Analytics Service（视频分析服务）
+
+Analytics Service配置和管理视频分析引擎，包括运动检测、越线检测、区域入侵等智能分析功能。
+
+**Analytics Service核心操作**：
+
+| 操作 | 功能 |
+|------|------|
+| `GetAnalyticsModules` | 获取分析模块列表 |
+| `GetAnalyticsModuleOptions` | 获取分析模块配置选项 |
+| `CreateAnalyticsModules` | 创建分析模块 |
+| `DeleteAnalyticsModules` | 删除分析模块 |
+| `GetAnalyticsModuleState` | 获取分析模块状态 |
+| `GetRules` | 获取规则列表 |
+| `GetRuleOptions` | 获取规则配置选项 |
+| `CreateRules` / `ModifyRules` / `DeleteRules` | 规则CRUD操作 |
+| `GetServiceCapabilities` | 获取分析服务能力 |
+| `GetVideoAnalyticsConfiguration` | 获取视频分析配置 |
+| `GetSupportedAnalyticsModules` | 获取支持的分析模块类型 |
+| `GetSupportedRules` | 获取支持的规则类型 |
+
+**预定义规则类型**：
+
+| 规则类型 | 功能描述 | 典型参数 |
+|---------|---------|---------|
+| `MotionDetection` | 运动检测 | 灵敏度、检测区域、最小物体尺寸 |
+| `LineDetector` | 越线检测 | 警戒线坐标、方向（双向/单向）、灵敏度 |
+| `FieldDetector` | 区域检测 | 区域多边形、进入/离开/在内检测 |
+| `CellMotionDetector` | 网格运动检测 | 网格划分、灵敏度阈值 |
+| `TamperDetection` | 篡改检测 | 检测灵敏度 |
+| `AudioDetection` | 音频检测 | 音量阈值、检测类型 |
+| `FaceDetection` | 人脸检测 | 最小人脸尺寸、检测模式 |
+| `ObjectTracker` | 物体跟踪 | 跟踪类型、最大跟踪数量 |
+
+**LineDetector规则配置示例**：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:tan="http://www.onvif.org/ver20/analytics/wsdl"
+            xmlns:tt="http://www.onvif.org/ver10/schema">
+  <s:Body>
+    <tan:CreateRules>
+      <tan:ConfigurationToken>VideoAnalyticsConfig_1</tan:ConfigurationToken>
+      <tan:Rule Name="CrossLineRule_1" Type="tt:LineDetector">
+        <tt:Parameters>
+          <tt:SimpleItem Name="Direction" Value="Any"/>
+          <tt:ElementItem Name="Line">
+            <tt:Polyline>
+              <tt:Point x="0.2" y="0.5"/>
+              <tt:Point x="0.8" y="0.5"/>
+            </tt:Polyline>
+          </tt:ElementItem>
+          <tt:SimpleItem Name="MinCount" Value="5"/>
+        </tt:Parameters>
+      </tan:Rule>
+    </tan:CreateRules>
+  </s:Body>
+</s:Envelope>
+```
+
+**Analytics与Event的联动**：
+
+视频分析规则触发后，通过Event Service发送事件通知。联动关系如下：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Analytics 与 Event 联动                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [视频流] --> [Analytics Engine] --> [规则匹配]                 │
+│                                          |                   │
+│                                          v                   │
+│                              [规则触发/解除]                  │
+│                                          |                   │
+│                                          v                   │
+│                              [Event Service]                  │
+│                                          |                   │
+│                    +---------------------+----------------+  │
+│                    |                     |                 |  │
+│                    v                     v                 v  │
+│              [Pull订阅队列]      [Push订阅回调]    [元数据流]   │
+│                    |                     |                 |  │
+│                    v                     v                 v  │
+│              [客户端PullMessages] [HTTP POST推送] [RTP传输]   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**元数据流（Metadata Stream）**：
+
+ONVIF Analytics产生的分析结果可以通过独立的Metadata流发送，使用RTP传输XML格式的元数据。元数据结构：
+
+```xml
+<!-- 元数据流中的ObjectTree示例 -->
+<tt:ObjectTree xmlns:tt="http://www.onvif.org/ver10/schema">
+  <tt:Object ObjectId="1">
+    <tt:Appearance>
+      <tt:Shape>
+        <tt:BoundingBox left="0.1" top="0.2" right="0.3" bottom="0.4"/>
+      </tt:Shape>
+      <tt:Class>
+        <tt:ClassCandidate>
+          <tt:Type>Person</tt:Type>
+          <tt:Likelihood>0.95</tt:Likelihood>
+        </tt:ClassCandidate>
+      </tt:Class>
+    </tt:Appearance>
+  </tt:Object>
+</tt:ObjectTree>
+```
+
+#### 其他服务简要介绍
+
+| 服务名称 | 核心功能 | 适用场景 |
+|---------|---------|---------|
+| **Search Service** | 录像搜索（按时间/事件/类型） | 需要检索录像的NVR/VMS |
+| **Recording Service** | 录像控制（启动/停止/配置） | 支持边缘存储的IPC |
+| **Replay Service** | 录像回放控制（播放/暂停/定位） | 录像回放功能 |
+| **Display Service** | 显示配置（布局/窗口） | 视频解码显示设备 |
+| **Receiver Service** | 接收远端设备媒体流 | 多通道NVR |
+| **DeviceIO Service** | 数字IO控制（GPIO/继电器/串口） | 报警输入输出 |
+| **Thermal Service** | 热成像配置（伪彩/温度范围） | 热成像摄像机 |
+| **Security Service** | 高级安全（TLS/证书/802.1X） | 高安全场景 |
+| **AccessControl Service** | 门禁点控制 | 门禁一体机 |
+| **DoorControl Service** | 门控操作（开锁/关锁/状态） | 门禁系统 |
+| **Credential Service** | 凭证管理（卡片/指纹/人脸） | 生物识别门禁 |
+| **Audio Service** | 音频输入输出控制 | 双向对讲设备 |
+| **Receiver Service** | 媒体流接收配置 | NVR/解码器 |
+
+---
+
+### 5.11.5 ONVIF Profiles（配置文件体系）
+
+ONVIF Profiles是为解决"设备声称支持ONVIF但互操作失败"问题而设计的**兼容性认证体系**。每个Profile定义了一组强制实现的服务和操作，通过Profile测试的设备才能声明支持该Profile。
+
+#### Profile体系总览
+
+| Profile | 发布年份 | 重点功能 | 适用场景 | 强制服务 |
+|---------|---------|---------|---------|---------|
+| **Profile S** | 2011 | 视频流、音频流、PTZ控制 | 基础网络摄像机 | Device, Media, Event（可选）, PTZ（可选） |
+| **Profile G** | 2014 | 边缘存储、录像检索、回放 | SD卡录像IPC、NVR | Device, Media, Recording, Search, Replay |
+| **Profile C** | 2014 | 门禁控制 | 门禁读卡器/控制器 | Device, AccessControl, Event |
+| **Profile Q** | 2016 | 快速安装、TLS加密 | 即插即用消费级设备 | Device（含高级发现）, 强制TLS |
+| **Profile T** | 2018 | 高级视频（H.265）、Analytics | AI智能摄像机 | Device, Media/Media2, Event, Analytics |
+| **Profile A** | 2019 | 门禁+音视频集成 | 综合门禁系统 | Device, AccessControl, Door, Media, Event |
+| **Profile M** | 2020 | IoT元数据、事件、MQTT | 智能传感器/IoT设备 | Device, Event, JSON over MQTT |
+| **Profile D** | 2021 | 音频输入/输出 | 对讲设备 | Device, Audio, Event |
+| **Profile E** | 2022 | 增强Analytics、隐私保护 | 高端AI分析设备 | Profile T + 扩展功能 |
+
+#### 各Profile详解
+
+**Profile S（Streaming - 视频流）**：
+
+Profile S是历史最悠久、使用最广泛的Profile，定义了基础视频流设备的要求：
+
+- **强制实现**：Device Service（含GetCapabilities/GetDeviceInformation）、Media Service（含GetProfiles/GetStreamUri/GetVideoEncoderConfigurations）
+- **可选实现**：PTZ Service、Event Service（Pull模式）、Imaging Service
+- **视频要求**：至少支持H.264编码，至少1个视频Profile
+- **典型设备**：固定枪机、半球摄像机、基础球机
+
+**Profile G（Edge Storage - 边缘存储）**：
+
+Profile G定义了支持本地录像的设备要求：
+
+- **强制实现**：Profile S的所有服务 + Recording/Search/Replay Service
+- **存储要求**：支持录像配置、按时间检索、回放控制
+- **典型设备**：支持SD卡录像的IPC、小型NVR
+
+**Profile C（Access Control - 门禁控制）**：
+
+Profile C专门针对门禁设备：
+
+- **强制实现**：Device Service、AccessControl Service、Event Service
+- **功能要求**：门禁点管理、访问规则、凭证验证
+- **典型设备**：门禁读卡器、门禁控制器
+
+**Profile Q（Quick Install - 快速安装）**：
+
+Profile Q旨在简化设备部署：
+
+- **强制实现**：Device Service（含高级WS-Discovery功能）、强制TLS支持
+- **特殊要求**：支持简易配置流程，出厂默认启用安全传输
+- **典型设备**：消费级智能家居摄像机
+
+**Profile T（Advanced Video - 高级视频）**：
+
+Profile T是最具技术含量的Profile之一：
+
+- **强制实现**：Device Service、Media或Media2 Service、Event Service、Analytics Service
+- **视频要求**：强制支持H.265/HEVC（Media2），至少支持1种Analytics规则
+- **安全要求**：强制TLS 1.2+
+- **典型设备**：AI智能分析摄像机、人脸抓拍摄像机
+
+**Profile M（Metadata & Events for IoT - IoT元数据）**：
+
+Profile M将ONVIF扩展到IoT领域：
+
+- **强制实现**：Device Service、Event Service、JSON over MQTT支持
+- **功能要求**：支持IoT传感器数据上报、元数据流传输
+- **典型设备**：智能传感器、环境探测器、多模态感知设备
+
+**Profile A（Access Control with Audio/Video - 综合门禁）**：
+
+Profile A是门禁领域的增强版：
+
+- **强制实现**：Profile C + Media Service + DoorControl Service
+- **功能要求**：门禁音视频对讲集成
+- **典型设备**：可视对讲门口机、综合门禁终端
+
+#### Profile版本与核心规范版本的关系
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ONVIF 版本关系图                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ONVIF Core Specification（核心规范）                            │
+│   ├── ver10.x（2010-2016）: 早期版本，支持Profile S/G/C           │
+│   ├── ver20.x（2017-2020）: 引入Media2, 支持Profile T             │
+│   └── ver21.x+（2021+）: 现代化API，支持Profile M/D/E             │
+│                                                                  │
+│   Profile Specifications（Profile规范）-- 独立于核心规范版本演进    │
+│   ├── Profile S v1.0 / v1.1 / v1.2                            │
+│   ├── Profile G v1.0                                          │
+│   ├── Profile T v1.0 / v1.1                                    │
+│   └── Profile M v1.0                                          │
+│                                                                  │
+│   关系说明：                                                      │
+│   - 核心规范定义服务API                                          │
+│   - Profile规范定义哪些API子集必须实现                            │
+│   - 设备通过Profile测试后获得认证                                 │
+│   - 一个设备可同时支持多个Profile                                  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Profile互操作性要点**：
+
+1. **多Profile声明**：设备可在GetCapabilities中声明支持多个Profile
+2. **Profile测试工具**：ONVIF提供Device Test Tool进行Profile兼容性测试
+3. **向后兼容**：支持高版本Profile的设备通常也兼容低版本客户端
+4. **强制vs可选**：每个Profile明确定义了Mandatory（强制）和Optional（可选）操作
+
+---
+
+### 5.11.6 嵌入式ONVIF协议栈实现
+
+#### 实现方案对比
+
+在嵌入式设备上实现ONVIF协议栈，主要有三种技术路线：
+
+| 方案 | 优点 | 缺点 | 代码体积 | 内存占用 | 适用场景 |
+|------|------|------|---------|---------|---------|
+| **gSOAP方案** | 从WSDL自动生成代码，功能最全，标准兼容性好 | 体积大（~1MB+），依赖多，编译复杂 | 1~3MB | 2~10MB | 高端NVR、x86/Linux IPC |
+| **纯HTTP+手写XML** | 体积最小（~50KB），零外部依赖，完全可控 | 开发工作量巨大，易出错，维护困难 | 50~200KB | 100KB~1MB | 资源极度受限的MCU设备 |
+| **轻量XML库+Socket** | 平衡方案，体积适中，有一定自动化支持 | 需要自行维护WSDL同步，XML解析仍有开销 | 200KB~1MB | 500KB~2MB | **主流嵌入式IPC（推荐）** |
+| **第三方开源库**（如rpos/onvifserver） | 基于成熟项目，开发快 | 可能需要深度定制，许可协议限制 | 视项目而定 | 视项目而定 | 原型验证、快速上市 |
+
+#### gSOAP实现详解
+
+gSOAP是ONVIF官方推荐的实现工具，支持从WSDL自动生成C/C++的SOAP客户端/服务端代码。
+
+**gSOAP工作流程**：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    gSOAP 代码生成流程                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ONVIF WSDL文件（如devicemgmt.wsdl）                              │
+│       |                                                          │
+│       v                                                          │
+│  ┌─────────────┐                                                 │
+│  │  wsdl2h工具  │  生成C/C++头文件（.h）                          │
+│  └─────────────┘                                                 │
+│       |  生成 onvif.h（包含所有服务定义）                         │
+│       v                                                          │
+│  ┌─────────────┐                                                 │
+│  │  soapcpp2工具│  生成SOAP Stub代码                               │
+│  └─────────────┘                                                 │
+│       |  生成 soapC.c, soapClient.c, soapServer.c                  │
+│       v                                                          │
+│  开发者编写服务端/客户端业务代码                                     │
+│       |                                                          │
+│       v                                                          │
+│  编译链接生成可执行文件                                              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**gSOAP嵌入式优化要点**：
+
+1. **内存优化**：使用`soap_malloc`替代`malloc`，利用gSOAP内存池
+2. **回调替换DOM**：使用`soap_set_omode(soap, SOAP_XML_TREE)`优化XML生成
+3. **裁剪WSDL**：只导入需要的服务WSDL，减少生成代码量
+4. **禁用不必要功能**：关闭HTTP keep-alive、压缩、Cookie支持
+5. **静态链接优化**：使用`strip`和`-ffunction-sections`减小体积
+
+**gSOAP典型Makefile片段**：
+
+```makefile
+# ONVIF gSOAP 编译示例 Makefile
+
+GSOAP_DIR = /usr/local/gsoap
+GSOAP_BIN = $(GSOAP_DIR)/bin
+
+# WSDL转C头文件
+onvif.h: devicemgmt.wsdl media.wsdl ptz.wsdl event.wsdl analytics.wsdl
+	$(GSOAP_BIN)/wsdl2h -c -o onvif.h \
+	    -t $(GSOAP_DIR)/share/gsoap/WS/typemap.dat \
+	    devicemgmt.wsdl media.wsdl ptz.wsdl event.wsdl analytics.wsdl
+
+# 生成SOAP代码
+soapC.c soapServer.c soapClient.c: onvif.h
+	$(GSOAP_BIN)/soapcpp2 -c -C -x -I $(GSOAP_DIR)/share/gsoap/import onvif.h
+
+# 编译
+CFLAGS += -I$(GSOAP_DIR)/include -DWITH_NONAMESPACES
+LDFLAGS += -L$(GSOAP_DIR)/lib -lgsoap
+
+onvif_server: soapC.c soapServer.c onvif_server_impl.c
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+```
+
+#### 轻量级实现框架（推荐方案）
+
+对于资源受限的主流嵌入式设备（如Hi3516/Hi3519、SigmaStar等方案），推荐使用轻量级HTTP Server + 手写/模板化XML的方案。
+
+**架构设计**：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 轻量级 ONVIF Server 架构                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
+│  │  HTTP Server │--->│ SOAP Router  │--->│ Service Dispatcher │ │
+│  │  (libev/lib  │    │  (解析Action) │    │  (按服务分发)       │ │
+│  │  event/poll) │    └─────────────┘    └─────────────────────┘ │
+│  └─────────────┘              |                |                 │
+│                               v                v                 │
+│                         ┌─────────┐    ┌────────────┐            │
+│                         │ XML Parser│    │ XML Builder │           │
+│                         │ (SAX/Expat│    │ (模板/拼接)│           │
+│                         │ /手写)    │    └────────────┘           │
+│                         └─────────┘          |                   │
+│                               |              v                   │
+│                               v      ┌─────────────────┐         │
+│                         提取参数      │  Device API Layer│         │
+│                                     │  (硬件抽象层)    │         │
+│                                     └─────────────────┘         │
+│                                               |                  │
+│                         ┌---------------------┼----------------┐   │
+│                         v                     v                v  │
+│                    ┌─────────┐         ┌─────────┐      ┌────────┐│
+│                    │ Video   │         │ Audio   │      │ GPIO   ││
+│                    │ Encoder │         │ Encoder │      │ Control││
+│                    │ (SDK)   │         │ (SDK)   │      │ (SDK)  ││
+│                    └─────────┘         └─────────┘      └────────┘│
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**轻量级HTTP Server核心代码**：
+
+```c
+/* onvif_http_server.h */
+#ifndef __ONVIF_HTTP_SERVER_H__
+#define __ONVIF_HTTP_SERVER_H__
+
+#include <stdint.h>
+
+#define ONVIF_HTTP_MAX_REQUEST_SIZE  (64 * 1024)   /* 64KB请求缓冲 */
+#define ONVIF_HTTP_MAX_RESPONSE_SIZE (256 * 1024)  /* 256KB响应缓冲 */
+#define ONVIF_HTTP_MAX_HEADER_SIZE   4096
+#define ONVIF_HTTP_LISTEN_BACKLOG    10
+#define ONVIF_HTTP_WORKER_THREADS    4
+
+/* HTTP请求结构 */
+typedef struct {
+    char    method[16];         /* GET/POST */
+    char    path[256];          /* 请求路径 */
+    char    soap_action[256];   /* SOAPAction头 */
+    char    content_type[128];  /* Content-Type */
+    int     content_length;     /* Content-Length */
+    char    authorization[512]; /* Authorization头 */
+    char    body[ONVIF_HTTP_MAX_REQUEST_SIZE];
+    int     body_len;
+} onvif_http_request_t;
+
+/* HTTP响应结构 */
+typedef struct {
+    int     status_code;        /* 200, 401, 500等 */
+    char    content_type[128];
+    char    body[ONVIF_HTTP_MAX_RESPONSE_SIZE];
+    int     body_len;
+    bool    need_auth;          /* 是否需要认证 */
+} onvif_http_response_t;
+
+/* SOAP请求处理器类型 */
+typedef int (*onvif_soap_handler_t)(const onvif_http_request_t *req,
+                                       onvif_http_response_t *resp,
+                                       void *user_data);
+
+/* 服务端初始化/反初始化 */
+int  onvif_http_server_start(uint16_t port, onvif_soap_handler_t handler,
+                              void *user_data);
+void onvif_http_server_stop(void);
+
+#endif /* __ONVIF_HTTP_SERVER_H__ */
+```
+
+```c
+/* onvif_http_server.c —— 轻量级HTTP Server实现 */
+#include "onvif_http_server.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+static int g_server_socket = -1;
+static volatile int g_running = 0;
+static onvif_soap_handler_t g_soap_handler = NULL;
+static void *g_user_data = NULL;
+
+/* 解析HTTP请求头 */
+static int parse_http_request(const char *raw, int raw_len,
+                               onvif_http_request_t *req)
+{
+    const char *line_start = raw;
+    const char *line_end;
+    const char *body_start = NULL;
+
+    memset(req, 0, sizeof(*req));
+
+    /* 解析请求行: METHOD PATH HTTP/1.1 */
+    line_end = strstr(line_start, "\r\n");
+    if (!line_end) return -1;
+
+    char request_line[1024];
+    int line_len = line_end - line_start;
+    if (line_len >= (int)sizeof(request_line)) line_len = sizeof(request_line) - 1;
+    memcpy(request_line, line_start, line_len);
+    request_line[line_len] = '\0';
+
+    sscanf(request_line, "%15s %255s", req->method, req->path);
+
+    /* 解析请求头 */
+    line_start = line_end + 2;
+    while ((line_end = strstr(line_start, "\r\n")) != NULL) {
+        if (line_end == line_start) {
+            /* 空行，头部结束 */
+            body_start = line_start + 2;
+            break;
+        }
+
+        char header[1024];
+        int hlen = line_end - line_start;
+        if (hlen >= (int)sizeof(header)) hlen = sizeof(header) - 1;
+        memcpy(header, line_start, hlen);
+        header[hlen] = '\0';
+
+        /* 解析各头部字段 */
+        if (strncasecmp(header, "SOAPAction:", 11) == 0) {
+            const char *val = header + 11;
+            while (*val == ' ' || *val == '\t' || *val == '"') val++;
+            int vlen = strlen(val);
+            while (vlen > 0 && (val[vlen-1] == '"' || val[vlen-1] == '\r' ||
+                                val[vlen-1] == '\n')) vlen--;
+            if (vlen >= (int)sizeof(req->soap_action))
+                vlen = sizeof(req->soap_action) - 1;
+            memcpy(req->soap_action, val, vlen);
+            req->soap_action[vlen] = '\0';
+        }
+        else if (strncasecmp(header, "Content-Type:", 13) == 0) {
+            const char *val = header + 13;
+            while (*val == ' ' || *val == '\t') val++;
+            strncpy(req->content_type, val, sizeof(req->content_type) - 1);
+        }
+        else if (strncasecmp(header, "Content-Length:", 15) == 0) {
+            req->content_length = atoi(header + 15);
+        }
+        else if (strncasecmp(header, "Authorization:", 14) == 0) {
+            const char *val = header + 14;
+            while (*val == ' ' || *val == '\t') val++;
+            strncpy(req->authorization, val, sizeof(req->authorization) - 1);
+        }
+
+        line_start = line_end + 2;
+    }
+
+    /* 复制body */
+    if (body_start && req->content_length > 0) {
+        int body_offset = body_start - raw;
+        int available = raw_len - body_offset;
+        req->body_len = (req->content_length < available)
+                         ? req->content_length : available;
+        if (req->body_len > (int)sizeof(req->body) - 1)
+            req->body_len = sizeof(req->body) - 1;
+        memcpy(req->body, body_start, req->body_len);
+        req->body[req->body_len] = '\0';
+    }
+
+    return 0;
+}
+
+/* 组装HTTP响应 */
+static int build_http_response(const onvif_http_response_t *resp,
+                                char *buf, size_t buflen)
+{
+    const char *status_text;
+    switch (resp->status_code) {
+        case 200: status_text = "OK"; break;
+        case 400: status_text = "Bad Request"; break;
+        case 401: status_text = "Unauthorized"; break;
+        case 404: status_text = "Not Found"; break;
+        case 500: status_text = "Internal Server Error"; break;
+        default:  status_text = "Unknown"; break;
+    }
+
+    int len = snprintf(buf, buflen,
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n",
+        resp->status_code, status_text,
+        resp->content_type,
+        resp->body_len
+    );
+
+    if (resp->need_auth) {
+        len += snprintf(buf + len, buflen - len,
+            "WWW-Authenticate: Digest realm=\"ONVIF\", "
+            "qop=\"auth\", nonce=\"%s\", opaque=\"%s\"\r\n",
+            "nonce_value_here", "opaque_value_here"
+        );
+    }
+
+    len += snprintf(buf + len, buflen - len, "\r\n");
+
+    if (resp->body_len > 0 && (size_t)len + resp->body_len < buflen) {
+        memcpy(buf + len, resp->body, resp->body_len);
+        len += resp->body_len;
+    }
+
+    return len;
+}
+
+/* 客户端连接处理线程 */
+static void *client_handler_thread(void *arg)
+{
+    int client_socket = *(int *)arg;
+    free(arg);
+
+    char raw_request[ONVIF_HTTP_MAX_REQUEST_SIZE + ONVIF_HTTP_MAX_HEADER_SIZE];
+    int received = 0;
+    int total_received = 0;
+
+    /* 读取HTTP请求 */
+    while (total_received < (int)sizeof(raw_request) - 1) {
+        received = recv(client_socket,
+                        raw_request + total_received,
+                        sizeof(raw_request) - total_received - 1, 0);
+        if (received <= 0) break;
+        total_received += received;
+        raw_request[total_received] = '\0';
+
+        /* 检查是否收到完整HTTP头 */
+        if (strstr(raw_request, "\r\n\r\n") != NULL) {
+            /* 检查Content-Length */
+            const char *cl = strcasestr(raw_request, "Content-Length:");
+            if (cl) {
+                int content_len = atoi(cl + 15);
+                int header_len = strstr(raw_request, "\r\n\r\n") - raw_request + 4;
+                if (total_received >= header_len + content_len) {
+                    break;  /* 完整请求已接收 */
+                }
+            } else {
+                break;  /* 无body的请求 */
+            }
+        }
+    }
+
+    if (total_received > 0) {
+        onvif_http_request_t req;
+        onvif_http_response_t resp;
+
+        memset(&resp, 0, sizeof(resp));
+        resp.status_code = 500;
+        strcpy(resp.content_type, "text/plain");
+
+        if (parse_http_request(raw_request, total_received, &req) == 0) {
+            /* 调用SOAP处理器 */
+            if (g_soap_handler) {
+                g_soap_handler(&req, &resp, g_user_data);
+            } else {
+                resp.status_code = 503;
+                strcpy(resp.content_type, "text/plain");
+                strcpy(resp.body, "Service Unavailable");
+                resp.body_len = strlen(resp.body);
+            }
+        } else {
+            resp.status_code = 400;
+            strcpy(resp.content_type, "text/plain");
+            strcpy(resp.body, "Bad Request");
+            resp.body_len = strlen(resp.body);
+        }
+
+        /* 发送响应 */
+        char response_buf[ONVIF_HTTP_MAX_RESPONSE_SIZE];
+        int response_len = build_http_response(&resp, response_buf,
+                                                sizeof(response_buf));
+        send(client_socket, response_buf, response_len, 0);
+    }
+
+    close(client_socket);
+    return NULL;
+}
+
+int onvif_http_server_start(uint16_t port, onvif_soap_handler_t handler,
+                             void *user_data)
+{
+    struct sockaddr_in server_addr;
+    int opt = 1;
+
+    g_soap_handler = handler;
+    g_user_data = user_data;
+    g_running = 1;
+
+    g_server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (g_server_socket < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    if (setsockopt(g_server_socket, SOL_SOCKET, SO_REUSEADDR,
+                   &opt, sizeof(opt)) < 0) {
+        perror("setsockopt");
+        close(g_server_socket);
+        return -1;
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(g_server_socket, (struct sockaddr *)&server_addr,
+             sizeof(server_addr)) < 0) {
+        perror("bind");
+        close(g_server_socket);
+        return -1;
+    }
+
+    if (listen(g_server_socket, ONVIF_HTTP_LISTEN_BACKLOG) < 0) {
+        perror("listen");
+        close(g_server_socket);
+        return -1;
+    }
+
+    printf("ONVIF HTTP Server listening on port %d\n", port);
+
+    while (g_running) {
+        struct sockaddr_in client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+        int client_socket = accept(g_server_socket,
+                                    (struct sockaddr *)&client_addr,
+                                    &addr_len);
+        if (client_socket < 0) {
+            if (errno == EINTR) continue;
+            perror("accept");
+            continue;
+        }
+
+        /* 为每个连接创建线程（生产环境建议使用线程池） */
+        pthread_t thread;
+        int *sock_ptr = malloc(sizeof(int));
+        *sock_ptr = client_socket;
+        pthread_create(&thread, NULL, client_handler_thread, sock_ptr);
+        pthread_detach(thread);
+    }
+
+    return 0;
+}
+
+void onvif_http_server_stop(void)
+{
+    g_running = 0;
+    if (g_server_socket >= 0) {
+        close(g_server_socket);
+        g_server_socket = -1;
+    }
+}
+```
+
+**SOAP消息路由器**：
+
+```c
+/* onvif_soap_router.c */
+#include "onvif_http_server.h"
+#include "onvif_device_mgmt.h"
+#include "onvif_media.h"
+#include <stdio.h>
+#include <string.h>
+
+/* 简化的XML标签提取（从body中提取特定标签值） */
+static int xml_extract_tag(const char *xml, const char *tag,
+                            char *value, size_t value_len)
+{
+    char start_tag[128];
+    char end_tag[128];
+    const char *start, *end;
+
+    snprintf(start_tag, sizeof(start_tag), "</%s>", tag);
+    snprintf(end_tag, sizeof(end_tag), "</%s>", tag);
+
+    start = strstr(xml, start_tag);
+    if (!start) return -1;
+    start = strchr(start, '>');
+    if (!start) return -1;
+    start++;
+
+    end = strstr(start, end_tag);
+    if (!end) return -1;
+
+    size_t len = end - start;
+    if (len >= value_len) len = value_len - 1;
+    memcpy(value, start, len);
+    value[len] = '\0';
+
+    return 0;
+}
+
+/* 从SOAPAction头提取服务和方法 */
+static void parse_soap_action(const char *soap_action,
+                               char *service, size_t service_len,
+                               char *method, size_t method_len)
+{
+    /* SOAPAction格式: "http://www.onvif.org/ver10/device/wsdl/GetCapabilities" */
+    const char *last_slash = strrchr(soap_action, '/');
+    if (last_slash) {
+        strncpy(method, last_slash + 1, method_len - 1);
+        method[method_len - 1] = '\0';
+
+        /* 提取服务名（倒数第二个斜杠之间） */
+        const char *prev_slash = last_slash;
+        while (prev_slash > soap_action && *(prev_slash - 1) != '/')
+            prev_slash--;
+        /* 此时 prev_slash 指向 "wsdl/" 中的 "w" */
+        /* 简化处理：从固定位置提取 */
+    }
+}
+
+/* 构建SOAP响应信封 */
+static int build_soap_response(const char *body_content,
+                                char *buf, size_t buflen)
+{
+    return snprintf(buf, buflen,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+        "  <s:Body>\n"
+        "%s\n"
+        "  </s:Body>\n"
+        "</s:Envelope>\n",
+        body_content
+    );
+}
+
+/* 构建SOAP Fault */
+static int build_soap_fault(const char *code, const char *subcode,
+                             const char *reason, char *buf, size_t buflen)
+{
+    return snprintf(buf, buflen,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"\n"
+        "            xmlns:ter=\"http://www.onvif.org/ver10/error\">\n"
+        "  <s:Body>\n"
+        "    <s:Fault>\n"
+        "      <s:Code>\n"
+        "        <s:Value>s:%s</s:Value>\n"
+        "        <s:Subcode>\n"
+        "          <s:Value>ter:%s</s:Value>\n"
+        "        </s:Subcode>\n"
+        "      </s:Code>\n"
+        "      <s:Reason>\n"
+        "        <s:Text xml:lang=\"en\">%s</s:Text>\n"
+        "      </s:Reason>\n"
+        "    </s:Fault>\n"
+        "  </s:Body>\n"
+        "</s:Envelope>\n",
+        code, subcode, reason
+    );
+}
+
+/* GetDeviceInformation处理器 */
+static int handle_get_device_info(const onvif_http_request_t *req,
+                                   onvif_http_response_t *resp)
+{
+    (void)req;
+    onvif_device_info_t info;
+    char body[8192];
+    char response[8192];
+
+    if (onvif_dev_get_device_information(&info) < 0) {
+        build_soap_fault("Receiver", "ActionNotSupported",
+    resp->body_len = strlen(resp->body);
+    resp->status_code = 500;
+    resp->content_type[0] = '\0';
+    return -1;
+    }
+
+    int body_len = snprintf(body, sizeof(body),
+        "    <tds:GetDeviceInformationResponse xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
+        "      <tds:Manufacturer>%s</tds:Manufacturer>\n"
+        "      <tds:Model>%s</tds:Model>\n"
+        "      <tds:FirmwareVersion>%s</tds:FirmwareVersion>\n"
+        "      <tds:SerialNumber>%s</tds:SerialNumber>\n"
+        "      <tds:HardwareId>%s</tds:HardwareId>\n"
+        "    </tds:GetDeviceInformationResponse>\n",
+        info.manufacturer, info.model, info.firmware_version,
+        info.serial_number, info.hardware_id
+    );
+
+    build_soap_response(body, resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+    resp->body_len = strlen(resp->body);
+    resp->status_code = 200;
+    strncpy(resp->content_type, "application/soap+xml; charset=utf-8",
+            sizeof(resp->content_type));
+
+    return 0;
+}
+
+/* GetCapabilities处理器 */
+static int handle_get_capabilities(const onvif_http_request_t *req,
+                                    onvif_http_response_t *resp)
+{
+    (void)req;
+    onvif_capabilities_t caps;
+    char body[16384];
+    char caps_xml[8192];
+
+    if (onvif_dev_get_capabilities(&caps) < 0) {
+        build_soap_fault("Receiver", "ActionNotSupported",
+                          "Failed to get capabilities",
+                          resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+        resp->body_len = strlen(resp->body);
+        resp->status_code = 500;
+        return -1;
+    }
+
+    /* 动态组装Capabilities XML */
+    int xml_len = snprintf(caps_xml, sizeof(caps_xml),
+        "      <tds:Capabilities xmlns:tt=\"http://www.onvif.org/ver10/schema\">\n"
+        "        <tt:Device>\n"
+        "          <tt:XAddr>http://%s/onvif/device_service</tt:XAddr>\n"
+        "          <tt:Network><tt:IPFilter>true</tt:IPFilter></tt:Network>\n"
+        "          <tt:System><tt:FirmwareUpgrade>true</tt:FirmwareUpgrade></tt:System>\n"
+        "        </tt:Device>\n",
+        "192.168.1.100"  /* 实际应从配置中获取 */
+    );
+
+    if (caps.has_media) {
+        xml_len += snprintf(caps_xml + xml_len, sizeof(caps_xml) - xml_len,
+            "        <tt:Media>\n"
+            "          <tt:XAddr>%s</tt:XAddr>\n"
+            "          <tt:StreamingCapabilities>\n"
+            "            <tt:RTPMulticast>true</tt:RTPMulticast>\n"
+            "            <tt:RTP_TCP>true</tt:RTP_TCP>\n"
+            "            <tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>\n"
+            "          </tt:StreamingCapabilities>\n"
+            "        </tt:Media>\n",
+            caps.media_xaddr);
+    }
+
+    if (caps.has_ptz) {
+        xml_len += snprintf(caps_xml + xml_len, sizeof(caps_xml) - xml_len,
+            "        <tt:PTZ>\n"
+            "          <tt:XAddr>%s</tt:XAddr>\n"
+            "        </tt:PTZ>\n",
+            caps.ptz_xaddr);
+    }
+
+    if (caps.has_events) {
+        xml_len += snprintf(caps_xml + xml_len, sizeof(caps_xml) - xml_len,
+            "        <tt:Events>\n"
+            "          <tt:XAddr>%s</tt:XAddr>\n"
+            "          <tt:WSPullPointSupport>true</tt:WSPullPointSupport>\n"
+            "        </tt:Events>\n",
+            caps.event_xaddr);
+    }
+
+    xml_len += snprintf(caps_xml + xml_len, sizeof(caps_xml) - xml_len,
+        "      </tds:Capabilities>\n");
+
+    int body_len = snprintf(body, sizeof(body),
+        "    <tds:GetCapabilitiesResponse xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
+        "%s"
+        "    </tds:GetCapabilitiesResponse>\n",
+        caps_xml
+    );
+
+    build_soap_response(body, resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+    resp->body_len = strlen(resp->body);
+    resp->status_code = 200;
+    strncpy(resp->content_type, "application/soap+xml; charset=utf-8",
+            sizeof(resp->content_type));
+
+    return 0;
+}
+
+/* GetProfiles处理器 */
+static int handle_get_profiles(const onvif_http_request_t *req,
+                                onvif_http_response_t *resp)
+{
+    (void)req;
+    onvif_profile_t profiles[8];
+    int count = 0;
+    char body[32768];
+    char profiles_xml[16384];
+    int xml_len = 0;
+
+    if (onvif_media_get_profiles(profiles, 8, &count) < 0) {
+        count = 0;
+    }
+
+    xml_len += snprintf(profiles_xml + xml_len, sizeof(profiles_xml) - xml_len,
+        "      <trt:Profiles xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\"\n"
+        "                   xmlns:tt=\"http://www.onvif.org/ver10/schema\">\n");
+
+    for (int i = 0; i < count; i++) {
+        xml_len += snprintf(profiles_xml + xml_len, sizeof(profiles_xml) - xml_len,
+            "        <tt:Profile token=\"%s\" fixed=\"%s\">\n"
+            "          <tt:Name>%s</tt:Name>\n"
+            "          <tt:VideoSourceConfiguration token=\"%s\"/>\n"
+            "          <tt:VideoEncoderConfiguration token=\"%s\"/>\n"
+            "        </tt:Profile>\n",
+            profiles[i].token,
+            profiles[i].fixed ? "true" : "false",
+            profiles[i].name,
+            profiles[i].video_source_config_token,
+            profiles[i].video_encoder_config_token
+        );
+    }
+
+    xml_len += snprintf(profiles_xml + xml_len, sizeof(profiles_xml) - xml_len,
+        "      </trt:Profiles>\n");
+
+    int body_len = snprintf(body, sizeof(body),
+        "    <trt:GetProfilesResponse xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\">\n"
+        "%s"
+        "    </trt:GetProfilesResponse>\n",
+        profiles_xml
+    );
+
+    build_soap_response(body, resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+    resp->body_len = strlen(resp->body);
+    resp->status_code = 200;
+    strncpy(resp->content_type, "application/soap+xml; charset=utf-8",
+            sizeof(resp->content_type));
+
+    return 0;
+}
+
+/* GetStreamUri处理器 */
+static int handle_get_stream_uri(const onvif_http_request_t *req,
+                                  onvif_http_response_t *resp)
+{
+    char profile_token[64] = "";
+    onvif_media_uri_t uri;
+    char body[4096];
+
+    /* 从SOAP body提取ProfileToken */
+    xml_extract_tag(req->body, "ProfileToken", profile_token, sizeof(profile_token));
+    if (strlen(profile_token) == 0) {
+        build_soap_fault("Sender", "ter:InvalidArgVal",
+                          "Missing ProfileToken",
+                          resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+        resp->body_len = strlen(resp->body);
+        resp->status_code = 400;
+        return -1;
+    }
+
+    if (onvif_media_get_stream_uri(profile_token, "RTP-Unicast", "RTSP", &uri) < 0) {
+        build_soap_fault("Receiver", "ter:ActionNotSupported",
+                          "Failed to get stream URI",
+                          resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+        resp->body_len = strlen(resp->body);
+        resp->status_code = 500;
+        return -1;
+    }
+
+    int body_len = snprintf(body, sizeof(body),
+        "    <trt:GetStreamUriResponse xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\"\n"
+        "                           xmlns:tt=\"http://www.onvif.org/ver10/schema\">\n"
+        "      <trt:MediaUri>\n"
+        "        <tt:Uri>%s</tt:Uri>\n"
+        "        <tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>\n"
+        "        <tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>\n"
+        "        <tt:Timeout>PT60S</tt:Timeout>\n"
+        "      </trt:MediaUri>\n"
+        "    </trt:GetStreamUriResponse>\n",
+        uri.uri
+    );
+
+    build_soap_response(body, resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+    resp->body_len = strlen(resp->body);
+    resp->status_code = 200;
+    strncpy(resp->content_type, "application/soap+xml; charset=utf-8",
+            sizeof(resp->content_type));
+
+    return 0;
+}
+
+/* 主SOAP路由器 */
+int onvif_soap_router(const onvif_http_request_t *req,
+                       onvif_http_response_t *resp,
+                       void *user_data)
+{
+    (void)user_data;
+
+    printf("[ONVIF] %s %s SOAPAction=%s\n",
+           req->method, req->path, req->soap_action);
+
+    /* 只处理POST请求到设备服务端点 */
+    if (strcasecmp(req->method, "POST") != 0) {
+        resp->status_code = 405;
+        strcpy(resp->content_type, "text/plain");
+        strcpy(resp->body, "Method Not Allowed");
+        resp->body_len = strlen(resp->body);
+        return -1;
+    }
+
+    /* 根据SOAPAction路由到对应处理器 */
+    if (strstr(req->soap_action, "GetDeviceInformation") != NULL) {
+        return handle_get_device_info(req, resp);
+    }
+    else if (strstr(req->soap_action, "GetCapabilities") != NULL) {
+        return handle_get_capabilities(req, resp);
+    }
+    else if (strstr(req->soap_action, "GetServices") != NULL) {
+        /* GetServices实现类似GetCapabilities */
+        return handle_get_capabilities(req, resp);  /* 简化处理 */
+    }
+    else if (strstr(req->soap_action, "GetProfiles") != NULL) {
+        return handle_get_profiles(req, resp);
+    }
+    else if (strstr(req->soap_action, "GetStreamUri") != NULL) {
+        return handle_get_stream_uri(req, resp);
+    }
+    else if (strstr(req->soap_action, "GetVideoEncoderConfiguration") != NULL) {
+        /* 需要额外实现 */
+        build_soap_fault("Receiver", "ActionNotSupported",
+                          "Not yet implemented",
+                          resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+        resp->body_len = strlen(resp->body);
+        resp->status_code = 500;
+        return -1;
+    }
+    else if (strstr(req->soap_action, "SystemReboot") != NULL) {
+        /* 返回响应后再执行重启 */
+        int body_len = snprintf(resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE,
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"\n"
+            "           xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
+            "  <s:Body>\n"
+            "    <tds:SystemRebootResponse>\n"
+            "      <tds:Message>Rebooting in 5 seconds...</tds:Message>\n"
+            "    </tds:SystemRebootResponse>\n"
+            "  </s:Body>\n"
+            "</s:Envelope>\n"
+        );
+        resp->body_len = body_len;
+        resp->status_code = 200;
+        strncpy(resp->content_type, "application/soap+xml; charset=utf-8",
+                sizeof(resp->content_type));
+
+        /* 在独立线程中延迟重启 */
+        system("(sleep 5 && reboot) &");
+        return 0;
+    }
+    else {
+        printf("[ONVIF] Unhandled SOAPAction: %s\n", req->soap_action);
+        build_soap_fault("Receiver", "ActionNotSupported",
+                          "The requested action is not supported",
+                          resp->body, ONVIF_HTTP_MAX_RESPONSE_SIZE);
+        resp->body_len = strlen(resp->body);
+        resp->status_code = 500;
+        return -1;
+    }
+}
+
+/* ONVIF Server启动入口 */
+int onvif_server_start(uint16_t http_port)
+{
+    return onvif_http_server_start(http_port, onvif_soap_router, NULL);
+}
+```
+
+**工程实践要点与常见坑点**：
+
+| 坑点 | 原因分析 | 解决方案 |
+|------|---------|---------|
+| **XML命名空间前缀不兼容** | 不同客户端使用不同的前缀（如`tds:` vs `tt:`） | 实现时不要硬编码前缀，使用标签匹配 |
+| **Content-Type要求严格** | ONVIF Device Test Tool要求`application/soap+xml` | 响应头必须包含正确的Content-Type |
+| **SOAPAction大小写敏感** | 某些客户端发送大小写不一致的Action | 使用case-insensitive匹配 |
+| **请求体编码问题** | 客户端可能发送GBK或其他编码 | 强制要求UTF-8，必要时转码 |
+| **并发请求处理** | 多客户端同时请求导致竞态 | 实现线程锁保护关键数据结构 |
+| **内存泄漏** | 频繁SOAP请求导致内存增长 | 使用内存池，每请求结束后释放 |
+| **WSDL版本不匹配** | 客户端期望的WSDL版本与设备不同 | 实现GetWsdlUrl返回正确的WSDL版本 |
+| **ProfileToken未找到** | 客户端请求的ProfileToken不存在 | 返回`ter:InvalidArgVal`错误 |
+
+#### XML解析与组装优化策略
+
+在嵌入式环境中，XML处理是ONVIF实现的主要性能瓶颈。以下是针对不同资源条件的优化策略：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              XML解析方案选择矩阵                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  资源条件                推荐方案              内存占用          │
+│  ─────────────────────────────────────────────────────────      │
+│  极度受限(<1MB RAM)      手写字符串解析          <50KB           │
+│  受限(1-4MB RAM)         轻量SAX解析器           100-300KB        │
+│  中等(4-16MB RAM)        Expat/libxml2 SAX      500KB-1MB        │
+│  充裕(>16MB RAM)         libxml2 DOM            2-10MB           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**手写XML解析核心模式（推荐用于<4MB RAM设备）**：
+
+```c
+/* 极简XML解析器 - 只提取特定路径的值 */
+/* 原理：不需要完整解析DOM树，直接定位到目标标签 */
+
+/* 示例：从嵌套XML中提取 tds:Manufacturer */
+/* 输入：<tds:GetDeviceInformationResponse><tds:Manufacturer>Axis</tds:Manufacturer>...</tds:GetDeviceInformationResponse> */
+/* 直接查找 "<tds:Manufacturer>" 和 "</tds:Manufacturer>" 之间的内容 */
+
+static int xml_extract_value_simple(const char *xml, const char *tag_name,
+                                     char *value, size_t value_len)
+{
+    char start_tag[128];
+    char end_tag[128];
+    const char *start = NULL;
+    const char *end = NULL;
+
+    /* 尝试带命名空间前缀的匹配 */
+    snprintf(start_tag, sizeof(start_tag), "</%s>", tag_name);
+    snprintf(end_tag, sizeof(end_tag), "</%s>", tag_name);
+
+    start = strstr(xml, start_tag);
+    if (start) {
+        start = strchr(start, '>');
+        if (start) {
+            start++;
+            end = strstr(start, end_tag);
+            if (end) {
+                size_t len = end - start;
+                if (len >= value_len) len = value_len - 1;
+                memcpy(value, start, len);
+                value[len] = '\0';
+                return 0;
+            }
+        }
+    }
+
+    return -1;  /* 未找到 */
+}
+
+/* 更灵活的解析：忽略命名空间前缀 */
+static int xml_extract_value_flexible(const char *xml, const char *local_name,
+                                       char *value, size_t value_len)
+{
+    /* 搜索模式：查找 "local_name=" 或 ">local_name<" */
+    /* 实现略，核心思路是字符串匹配而非完整解析 */
+    (void)xml; (void)local_name; (void)value; (void)value_len;
+    return -1;
+}
+```
+
+**XML响应模板化**：
+
+```c
+/* 预定义响应模板，运行时填充变量 */
+/* 优点：避免运行时的字符串拼接开销，减少堆分配 */
+
+/* 模板定义 */
+static const char TEMPLATE_GET_DEVICE_INFO[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+    "  <s:Body>\n"
+    "    <tds:GetDeviceInformationResponse xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
+    "      <tds:Manufacturer>%s</tds:Manufacturer>\n"
+    "      <tds:Model>%s</tds:Model>\n"
+    "      <tds:FirmwareVersion>%s</tds:FirmwareVersion>\n"
+    "      <tds:SerialNumber>%s</tds:SerialNumber>\n"
+    "      <tds:HardwareId>%s</tds:HardwareId>\n"
+    "    </tds:GetDeviceInformationResponse>\n"
+    "  </s:Body>\n"
+    "</s:Envelope>\n";
+
+/* 使用示例 */
+static int build_get_device_info_response(const onvif_device_info_t *info,
+                                           char *buf, size_t buflen)
+{
+    return snprintf(buf, buflen, TEMPLATE_GET_DEVICE_INFO,
+                    info->manufacturer, info->model,
+                    info->firmware_version, info->serial_number,
+                    info->hardware_id);
+}
+```
+
+---
+
+### 5.11.7 安全性与鉴权机制
+
+ONVIF协议的安全性建立在多个行业标准之上，形成纵深防御体系。
+
+#### 安全架构概览
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ONVIF 安全架构层次                             │
+├─────────────────────────────────────────────────────────────────┤
+│  层4: 应用层安全                                                  │
+│  ├── 用户访问控制（管理员/操作员/浏览者）                            │
+│  └── 能力集访问限制                                               │
+│                                                                  │
+│  层3: 消息层安全（WS-Security）                                   │
+│  ├── UsernameToken（用户名/密码/Nonce/Digest）                    │
+│  └── 时间戳防重放攻击                                             │
+│                                                                  │
+│  层2: 传输层安全（TLS/HTTPS）                                     │
+│  ├── TLS 1.2/1.3加密传输                                          │
+│  ├── X.509证书认证                                               │
+│  └── 证书校验与撤销                                               │
+│                                                                  │
+│  层1: 网络层安全                                                  │
+│  ├── HTTP Digest Authentication（Challenge/Response）              │
+│  ├── IP地址过滤（白名单/黑名单）                                   │
+│  └── 802.1X端口认证（有线网络）                                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### HTTP Digest Authentication
+
+HTTP Digest是ONVIF最基本的认证机制，基于RFC 2617，采用Challenge/Response模式。
+
+**认证流程**：
+
+```
+  Client                                Device (ONVIF Server)
+    |                                           |
+    |--- (1) 未认证请求 ------------------------->|
+    |                                           |
+    |<-- (2) 401 Unauthorized + WWW-Authenticate-|
+    |        nonce="abc123", realm="ONVIF"       |
+    |                                           |
+    |--- (3) 认证请求 + Authorization ----------->|
+    |        username="admin"                    |
+    |        response=MD5(MD5(username:realm:pwd)|
+    |                  :nonce:nc:cnonce:qop:    |
+    |                   MD5(method:uri))          |
+    |                                           |
+    |<-- (4) 200 OK + 业务响应 -------------------|
+    |                                           |
+```
+
+**response计算**：
+
+```
+HA1 = MD5(username:realm:password)
+HA2 = MD5(method:digestURI)
+response = MD5(HA1:nonce:nonceCount:clientNonce:qop:HA2)
+```
+
+**嵌入式Digest认证实现要点**：
+
+```c
+/* digest_auth.h */
+#ifndef __DIGEST_AUTH_H__
+#define __DIGEST_AUTH_H__
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* 解析Authorization头 */
+typedef struct {
+    char    username[64];
+    char    realm[64];
+    char    nonce[64];
+    char    uri[256];
+    char    response[64];   /* MD5哈希值 */
+    char    qop[16];
+    char    nc[16];         /* nonce count */
+    char    cnonce[64];     /* client nonce */
+    char    method[16];     /* GET/POST */
+} digest_auth_params_t;
+
+/* 解析WWW-Authenticate参数 */
+typedef struct {
+    char    realm[64];
+    char    nonce[64];
+    char    opaque[64];
+    char    qop[64];
+    bool    stale;
+} digest_challenge_t;
+
+/* 解析Authorization头字符串 */
+int digest_parse_authorization(const char *auth_header,
+                                digest_auth_params_t *params);
+
+/* 生成Challenge（401响应） */
+int digest_generate_challenge(digest_challenge_t *challenge,
+                               char *out_buf, size_t out_len);
+
+/* 验证Digest response */
+bool digest_verify_response(const digest_auth_params_t *params,
+                            const char *expected_password,
+                            const digest_challenge_t *original_challenge);
+
+/* 生成MD5哈希 */
+void digest_md5_hash(const char *input, char *output_hex, size_t output_len);
+
+#endif /* __DIGEST_AUTH_H__ */
+```
+
+```c
+/* digest_auth.c */
+#include "digest_auth.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <openssl/md5.h>  /* 或使用mbedtls/md5.h */
+
+void digest_md5_hash(const char *input, char *output_hex, size_t output_len)
+{
+    unsigned char digest[16];
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, input, strlen(input));
+    MD5_Final(digest, &ctx);
+
+    /* 转为16进制字符串 */
+    for (int i = 0; i < 16 && (size_t)(i * 2 + 2) <= output_len; i++) {
+        sprintf(output_hex + i * 2, "%02x", digest[i]);
+    }
+    output_hex[32] = '\0';
+}
+
+int digest_parse_authorization(const char *auth_header,
+                                digest_auth_params_t *params)
+{
+    const char *p = auth_header;
+    memset(params, 0, sizeof(*params));
+
+    /* 跳过 "Digest " 前缀 */
+    if (strncasecmp(p, "Digest ", 7) == 0) {
+        p += 7;
+    }
+
+    /* 解析各个字段 */
+    while (*p) {
+        while (*p == ' ' || *p == ',') p++;
+
+        if (strncasecmp(p, "username=", 9) == 0) {
+            p += 9;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->username) - 1) {
+                params->username[i++] = *p++;
+            }
+            params->username[i] = '\0';
+        }
+        else if (strncasecmp(p, "realm=", 6) == 0) {
+            p += 6;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->realm) - 1) {
+                params->realm[i++] = *p++;
+            }
+            params->realm[i] = '\0';
+        }
+        else if (strncasecmp(p, "nonce=", 6) == 0) {
+            p += 6;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->nonce) - 1) {
+                params->nonce[i++] = *p++;
+            }
+            params->nonce[i] = '\0';
+        }
+        else if (strncasecmp(p, "uri=", 4) == 0) {
+            p += 4;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->uri) - 1) {
+                params->uri[i++] = *p++;
+            }
+            params->uri[i] = '\0';
+        }
+        else if (strncasecmp(p, "response=", 9) == 0) {
+            p += 9;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->response) - 1) {
+                params->response[i++] = *p++;
+            }
+            params->response[i] = '\0';
+        }
+        else if (strncasecmp(p, "qop=", 4) == 0) {
+            p += 4;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->qop) - 1) {
+                params->qop[i++] = *p++;
+            }
+            params->qop[i] = '\0';
+        }
+        else if (strncasecmp(p, "nc=", 3) == 0) {
+            p += 3;
+            int i = 0;
+            while (*p && *p != ',' && *p != ' ' && i < (int)sizeof(params->nc) - 1) {
+                params->nc[i++] = *p++;
+            }
+            params->nc[i] = '\0';
+        }
+        else if (strncasecmp(p, "cnonce=", 7) == 0) {
+            p += 7;
+            if (*p == '"') p++;
+            int i = 0;
+            while (*p && *p != '"' && i < (int)sizeof(params->cnonce) - 1) {
+                params->cnonce[i++] = *p++;
+            }
+            params->cnonce[i] = '\0';
+        }
+        else {
+            /* 跳过未知字段 */
+            while (*p && *p != ',') p++;
+        }
+
+        if (*p == '"') p++;
+    }
+
+    return 0;
+}
+
+bool digest_verify_response(const digest_auth_params_t *params,
+                            const char *expected_password,
+                            const digest_challenge_t *original_challenge)
+{
+    char ha1[64], ha2[64], expected_response[64];
+    char ha1_input[256], ha2_input[256], response_input[512];
+
+    /* 计算 HA1 = MD5(username:realm:password) */
+    snprintf(ha1_input, sizeof(ha1_input), "%s:%s:%s",
+             params->username, original_challenge->realm, expected_password);
+    digest_md5_hash(ha1_input, ha1, sizeof(ha1));
+
+    /* 计算 HA2 = MD5(method:uri) */
+    snprintf(ha2_input, sizeof(ha2_input), "%s:%s",
+             params->method, params->uri);
+    digest_md5_hash(ha2_input, ha2, sizeof(ha2));
+
+    /* 计算 response = MD5(HA1:nonce:nc:cnonce:qop:HA2) */
+    if (strlen(params->qop) > 0) {
+        snprintf(response_input, sizeof(response_input), "%s:%s:%s:%s:%s:%s",
+                 ha1, original_challenge->nonce, params->nc,
+                 params->cnonce, params->qop, ha2);
+    } else {
+        snprintf(response_input, sizeof(response_input), "%s:%s:%s",
+                 ha1, original_challenge->nonce, ha2);
+    }
+    digest_md5_hash(response_input, expected_response, sizeof(expected_response));
+
+    /* 比较 */
+    return (strcasecmp(expected_response, params->response) == 0);
+}
+
+int digest_generate_challenge(digest_challenge_t *challenge,
+                               char *out_buf, size_t out_len)
+{
+    /* 生成随机nonce */
+    static unsigned int counter = 0;
+    snprintf(challenge->nonce, sizeof(challenge->nonce),
+             "%08x%08x", (unsigned)time(NULL), counter++);
+    strncpy(challenge->realm, "ONVIF", sizeof(challenge->realm));
+    strncpy(challenge->qop, "auth", sizeof(challenge->qop));
+
+    return snprintf(out_buf, out_len,
+        "Digest realm=\"%s\", qop=\"%s\", nonce=\"%s\", opaque=\"%s\"",
+        challenge->realm, challenge->qop,
+        challenge->nonce, challenge->opaque);
+}
+```
+
+#### WS-Security UsernameToken
+
+WS-Security（Web Services Security）是OASIS标准，ONVIF使用其中的UsernameToken机制进行SOAP消息级别的认证。
+
+**UsernameToken结构**：
+
+```xml
+<wsse:Security s:mustUnderstand="1"
+  xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/...">
+  <wsse:UsernameToken>
+    <wsse:Username>admin</wsse:Username>
+    <wsse:Password Type="...#PasswordDigest">base64_encoded_digest</wsse:Password>
+    <wsse:Nonce EncodingType="...#Base64Binary">base64_nonce</wsse:Nonce>
+    <wsu:Created>2023-10-01T12:00:00.000Z</wsu:Created>
+  </wsse:UsernameToken>
+</wsse:Security>
+```
+
+**PasswordDigest计算**：
+
+```
+PasswordDigest = Base64(SHA1(Nonce + Created + SHA1(Password)))
+```
+
+其中Password的SHA1在ONVIF规范中称为"Password hash"。
+
+**WS-Security实现要点**：
+
+1. **时间戳校验**：Created时间戳与设备当前时间差应在合理范围内（如5分钟），防止重放攻击
+2. **Nonce去重**：记录已使用的Nonce，防止同一Nonce重复认证
+3. **Password类型**：支持`PasswordText`（明文，不安全）和`PasswordDigest`（推荐）
+
+#### TLS/HTTPS传输加密
+
+| 特性 | ONVIF要求 | 嵌入式实现建议 |
+|------|----------|--------------|
+| TLS版本 | TLS 1.2或更高 | Profile T/Q强制TLS |
+| 证书 | X.509 v3 | 可使用自签名证书 |
+| 证书校验 | 推荐双向认证 | 单向认证即可满足大部分需求 |
+| 加密套件 | 禁用RC4/MD5/SHA1 | 优先AES-GCM和ECDHE |
+| 端口 | 默认443 | 可配置 |
+
+**mbedTLS嵌入式集成示例**：
+
+```c
+/* 使用mbedTLS实现HTTPS Server（适用于<16MB RAM设备） */
+/* 代码框架 */
+#include "mbedtls/ssl.h"
+#include "mbedtls/x509_crt.h"
+#include "mbedtls/pk.h"
+
+static mbedtls_ssl_context ssl_ctx;
+static mbedtls_ssl_config ssl_conf;
+static mbedtls_x509_crt server_cert;
+static mbedtls_pk_context server_key;
+
+int onvif_https_init(const char *cert_pem, const char *key_pem)
+{
+    mbedtls_ssl_init(&ssl_ctx);
+    mbedtls_ssl_config_init(&ssl_conf);
+    mbedtls_x509_crt_init(&server_cert);
+    mbedtls_pk_init(&server_key);
+
+    /* 加载证书 */
+    mbedtls_x509_crt_parse(&server_cert,
+                            (const unsigned char *)cert_pem,
+                            strlen(cert_pem) + 1);
+    mbedtls_pk_parse_key(&server_key,
+                          (const unsigned char *)key_pem,
+                          strlen(key_pem) + 1,
+                          NULL, 0,
+                          mbedtls_ctr_drbg_random, &ctr_drbg);
+
+    /* 配置SSL */
+    mbedtls_ssl_config_defaults(&ssl_conf,
+                                 MBEDTLS_SSL_IS_SERVER,
+                                 MBEDTLS_SSL_TRANSPORT_STREAM,
+                                 MBEDTLS_SSL_PRESET_DEFAULT);
+    mbedtls_ssl_conf_authmode(&ssl_conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
+    mbedtls_ssl_conf_ca_chain(&ssl_conf, &server_cert, NULL);
+    mbedtls_ssl_conf_own_cert(&ssl_conf, &server_cert, &server_key);
+
+    mbedtls_ssl_setup(&ssl_ctx, &ssl_conf);
+
+    return 0;
+}
+```
+
+#### 用户访问控制
+
+ONVIF定义三级用户角色：
+
+| 角色 | 权限范围 | 典型用途 |
+|------|---------|---------|
+| **Administrator（管理员）** | 完全控制，包括用户管理 | 系统管理员 |
+| **Operator（操作员）** | 配置设备参数，但不能管理用户 | 运维人员 |
+| **User（浏览者）** | 只能查看视频和状态 | 普通监控用户 |
+| **Anonymous（匿名）** | 无需认证即可访问（受限功能） | 公开视频流 |
+
+**嵌入式安全最佳实践**：
+
+1. **默认密码强制修改**：首次上电后要求修改默认密码
+2. **密码复杂度检查**：最小长度8位，包含大小写字母和数字
+3. **登录失败锁定**：连续5次失败锁定账户15分钟
+4. **会话超时**：无操作15分钟后自动注销
+5. **密码哈希存储**：使用SHA-256 + Salt存储，不使用明文或MD5
+6. **固件签名**：固件升级包必须验证数字签名
+7. **TLS默认启用**：新设备出厂默认启用HTTPS
+8. **审计日志**：记录所有配置变更和认证事件
+
+---
+
+### 5.11.8 ONVIF与GB28181的关系
+
+在中国市场，ONVIF和GB28181是两个并行的设备管理标准。理解它们的差异和共存策略对国内嵌入式开发至关重要。
+
+#### 协议对比总览
+
+| 对比项 | ONVIF | GB28181 |
+|--------|-------|---------|
+| **发起方** | ONVIF Inc.（国际产业联盟） | 公安部（中国国家标准） |
+| **标准编号** | ONVIF Core Spec + Profile Spec | GB/T 28181-2016（最新版2022） |
+| **应用领域** | 全球商业安防市场 | 中国政府/公安/雪亮工程 |
+| **传输层协议** | HTTP/HTTPS + SOAP/XML | SIP（会话初始协议） |
+| **媒体传输** | RTSP/RTP（直接RTP负载） | RTP/PS（MPEG-PS封装） |
+| **发现机制** | WS-Discovery（UDP多播） | SIP REGISTER注册 |
+| **设备注册** | 被动等待Probe | 主动向平台注册 |
+| **信令加密** | TLS/HTTPS + WS-Security | SIP over TLS |
+| **媒体加密** | 可选SRTP | 可选S/MIME |
+| **编码支持** | H.264/H.265/MJPEG | H.264/H.265（强制PS封装） |
+| **音频支持** | G.711/G.726/AAC等 | G.711/G.723.1/AAC等 |
+| **云台控制** | ONVIF PTZ Service | SIP MESSAGE/INFO扩展 |
+| **事件通知** | WS-Eventing / Pull-Point | SIP SUBSCRIBE/NOTIFY |
+| **录像检索** | ONVIF Search Service | SIP查询命令 |
+| **国内兼容性** | 主流设备均支持 | 政府/公安项目强制要求 |
+| **测试认证** | ONVIF Device Test Tool | 公安部检测机构 |
+| **生态工具** | ONVIF Device Manager等 | 海康/大华等平台软件 |
+| **国际化程度** | 全球通用 | 主要在中国使用 |
+
+#### 核心差异深入分析
+
+**1. 信令协议差异**：
+
+ONVIF使用HTTP上的SOAP/XML，是一种"请求-响应"风格的同步调用。GB28181使用SIP，是一种"会话"风格的异步信令协议。
+
+```
+ONVIF:  HTTP POST --> SOAP/XML --> 即时响应
+GB28181: SIP REGISTER --> 200 OK（周期性心跳保活）
+         SIP INVITE --> 200 OK + SDP --> RTP媒体流
+```
+
+**2. 媒体封装差异**：
+
+这是两者最关键的底层差异：
+
+| 特性 | ONVIF RTP | GB28181 RTP |
+|------|-----------|-------------|
+| 负载类型 | 直接RTP负载（RFC 6184 H.264, RFC 7798 H.265） | MPEG-PS封装后作为RTP负载 |
+| 封装开销 | 低（仅RTP头12字节） | 高（PS头+PACK头+RTP头） |
+| 时钟同步 | RTCP Sender Reports | PS系统参考时钟（SCR） |
+| 复杂度 | 简单直接 | 需要PS解封装 |
+| 兼容性 | 通用播放器支持 | 需专用解码器 |
+
+**GB28181的PS封装示意**：
+
+```
+RTP Payload = MPEG-PS
+├── PS System Header
+├── PS Map (Program Stream Map)
+├── PES Packet (Video)
+│   ├── PES Header
+│   └── H.264 NAL Units
+├── PES Packet (Audio)
+│   ├── PES Header
+│   └── AAC/G.711 Frames
+└── PS End
+```
+
+#### 国内市场的双协议栈需求
+
+在中国市场，中高端IPC产品通常需要**同时支持ONVIF和GB28181**：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     双协议栈设备架构                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐   │
+│   │   ONVIF     │      │   GB28181   │      │   RTSP      │   │
+│   │   Server    │      │   Server    │      │   Server    │   │
+│   │  (SOAP/XML) │      │  (SIP/SDP)  │      │  (RFC 2326) │   │
+│   └──────┬──────┘      └──────┬──────┘      └──────┬──────┘   │
+│          │                    │                    │           │
+│          └────────────────────┼────────────────────┘           │
+│                               │                                │
+│                    ┌──────────┴──────────┐                    │
+│                    │   Device Control    │                    │
+│                    │      Layer          │                    │
+│                    │  (统一的设备抽象)    │                    │
+│                    └──────────┬──────────┘                    │
+│                               │                                │
+│          ┌────────────────────┼────────────────────┐         │
+│          v                    v                    v         │
+│   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐   │
+│   │ Video Encoder│      │ Audio Encoder│      │    PTZ      │   │
+│   │  (H.264/265) │      │   (G.711)    │      │  Control    │   │
+│   └─────────────┘      └─────────────┘      └─────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 协议网关设计（ONVIF↔GB28181转换）
+
+在大型安防项目中，常需要部署协议网关实现ONVIF和GB28181系统的互通：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    协议网关应用场景                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   [ONVIF IPC] ──ONVIF──> [协议网关] ──GB28181──> [公安平台]      │
+│      Axis/Dahua          (软件转换)            (海康iVMS/大华DSS)│
+│                                                                  │
+│   或反向：                                                        │
+│                                                                  │
+│   [GB28181 IPC] ──GB28181──> [协议网关] ──ONVIF──> [NVR/VMS]     │
+│      国产IPC               (软件转换)         (Milestone/Genetec)  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**协议转换核心逻辑**：
+
+```c
+/* 简化的协议网关转换逻辑 */
+
+/* ONVIF GetStreamUri -> GB28181 INVITE */
+static int onvif_to_gb28181_invite(const char *onvif_rtsp_url,
+                                    const char *device_id,
+                                    char *gb28181_sdp, size_t sdp_len)
+{
+    /* 1. 从ONVIF RTSP URL提取媒体参数 */
+    /* 2. 构造GB28181 SIP INVITE消息 */
+    /* 3. 生成SDP（包含PS负载类型声明） */
+
+    snprintf(gb28181_sdp, sdp_len,
+        "v=0\r\n"
+        "o=%s 0 0 IN IP4 %s\r\n"
+        "s=Play\r\n"
+        "c=IN IP4 %s\r\n"
+        "t=0 0\r\n"
+        "m=video %d RTP/AVP 96\r\n"
+        "a=rtpmap:96 PS/90000\r\n"
+        "a=recvonly\r\n",
+        device_id, "192.168.1.100", "192.168.1.100", 20000
+    );
+
+    return 0;
+}
+
+/* GB28181 RTP/PS -> ONVIF RTP */
+static int gb28181_ps_to_onvif_rtp(const uint8_t *ps_data, int ps_len,
+                                      uint8_t *rtp_data, int *rtp_len)
+{
+    /* 1. 解析MPEG-PS封装 */
+    /* 2. 提取PES包中的H.264/H.265 NAL单元 */
+    /* 3. 直接封装为RTP负载 */
+    /* 此转换开销较大，通常不建议实时转换 */
+
+    (void)ps_data; (void)ps_len; (void)rtp_data; (void)rtp_len;
+    return -1;  /* 示意：实际实现复杂 */
+}
+```
+
+**国内开发建议**：
+
+1. **出海产品**：仅需ONVIF，根据目标市场选择支持Profile
+2. **国内通用产品**：ONVIF + GB28181双协议栈
+3. **政府/公安项目**：GB28181为强制要求，ONVIF为可选补充
+4. **协议优先级**：设备同时接入时，建议ONVIF和GB28181使用独立的媒体通道
+
+---
+
+### 5.11.9 嵌入式开发实战
+
+#### 内存受限环境的XML解析策略
+
+在RAM仅有4~8MB的嵌入式设备上，XML解析策略的选择直接影响系统稳定性。
+
+| 解析策略 | 内存模型 | 适用场景 | 推荐库 |
+|---------|---------|---------|--------|
+| **手写字符串匹配** | 零额外内存，栈上处理 | 解析固定格式的请求 | 无 |
+| **SAX（事件驱动）** | 流式处理，不建DOM树 | 解析大型XML，提取少量字段 | Expat |
+| **Pull解析** | 迭代器模式，按需读取 | 中等复杂度XML | libxml2 xmlreader |
+| **DOM（树模型）** | 完整内存树 | 内存充裕，需要随机访问 | libxml2 |
+
+**Expat SAX解析器集成示例**：
+
+```c
+#include <expat.h>
+#include <string.h>
+
+/* Expat是BSD许可证的轻量XML解析器，体积约100KB */
+
+typedef struct {
+    char target_tag[64];       /* 要提取的标签名 */
+    char current_tag[64];      /* 当前标签 */
+    char value[256];           /* 提取的值 */
+    int  value_len;
+    int  depth;                /* 当前深度 */
+    int  target_depth;         /* 目标标签深度（-1=未找到） */
+} xml_extract_ctx_t;
+
+static void XMLCALL start_element(void *userData,
+                                   const XML_Char *name,
+                                   const XML_Char **atts)
+{
+    xml_extract_ctx_t *ctx = (xml_extract_ctx_t *)userData;
+    (void)atts;
+
+    strncpy(ctx->current_tag, name, sizeof(ctx->current_tag) - 1);
+    ctx->depth++;
+
+    if (ctx->target_depth < 0 &&
+        (strcmp(name, ctx->target_tag) == 0 ||
+         strstr(name, ctx->target_tag) != NULL)) {
+        ctx->target_depth = ctx->depth;
+        ctx->value_len = 0;
+        ctx->value[0] = '\0';
+    }
+}
+
+static void XMLCALL end_element(void *userData, const XML_Char *name)
+{
+    xml_extract_ctx_t *ctx = (xml_extract_ctx_t *)userData;
+    (void)name;
+
+    if (ctx->depth == ctx->target_depth) {
+        ctx->target_depth = -1;  /* 提取完成 */
+    }
+    ctx->depth--;
+    ctx->current_tag[0] = '\0';
+}
+
+static void XMLCALL char_data(void *userData, const XML_Char *s, int len)
+{
+    xml_extract_ctx_t *ctx = (xml_extract_ctx_t *)userData;
+
+    if (ctx->depth == ctx->target_depth && len > 0) {
+        int copy_len = len;
+        if (ctx->value_len + copy_len >= (int)sizeof(ctx->value))
+            copy_len = sizeof(ctx->value) - ctx->value_len - 1;
+        memcpy(ctx->value + ctx->value_len, s, copy_len);
+        ctx->value_len += copy_len;
+        ctx->value[ctx->value_len] = '\0';
+    }
+}
+
+/* 使用示例：从SOAP body提取ProfileToken */
+static int extract_profile_token_expat(const char *xml, int xml_len,
+                                        char *token, size_t token_len)
+{
+    XML_Parser parser = XML_ParserCreate(NULL);
+    xml_extract_ctx_t ctx;
+
+    memset(&ctx, 0, sizeof(ctx));
+    strncpy(ctx.target_tag, "ProfileToken", sizeof(ctx.target_tag));
+    ctx.target_depth = -1;
+
+    XML_SetUserData(parser, &ctx);
+    XML_SetElementHandler(parser, start_element, end_element);
+    XML_SetCharacterDataHandler(parser, char_data);
+
+    if (XML_Parse(parser, xml, xml_len, XML_TRUE) == XML_STATUS_OK) {
+        if (ctx.value_len > 0) {
+            strncpy(token, ctx.value, token_len);
+            XML_ParserFree(parser);
+            return 0;
+        }
+    }
+
+    XML_ParserFree(parser);
+    return -1;
+}
+```
+
+#### SOAP消息组装优化
+
+**模板化响应策略**：
+
+```c
+/* 预编译响应模板，消除运行时字符串拼接开销 */
+
+/* 模板存储在Flash/ROM中（只读），不占用RAM */
+static const char TEMPLATE_SOAP_ENVELOPE_START[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+    "  <s:Body>\n";
+
+static const char TEMPLATE_SOAP_ENVELOPE_END[] =
+    "  </s:Body>\n"
+    "</s:Envelope>\n";
+
+/* 使用writev聚合输出，避免多次memcpy */
+#include <sys/uio.h>
+
+static int send_soap_response_v(int client_socket,
+                                 const struct iovec *iov, int iovcnt)
+{
+    int total = 0;
+    for (int i = 0; i < iovcnt; i++) {
+        total += iov[i].iov_len;
+    }
+
+    /* 先发送HTTP头 */
+    char http_header[512];
+    int header_len = snprintf(http_header, sizeof(http_header),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/soap+xml; charset=utf-8\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        total
+    );
+    send(client_socket, http_header, header_len, 0);
+
+    /* 使用writev发送所有body片段 */
+    return writev(client_socket, iov, iovcnt);
+}
+
+/* 示例：使用模板和writev发送GetDeviceInformation响应 */
+static int send_device_info_response_optimized(int client_socket,
+                                                  const onvif_device_info_t *info)
+{
+    char manufacturer[128], model[128], firmware[128], serial[128], hardware[128];
+
+    /* 对XML特殊字符进行转义 */
+    xml_escape(info->manufacturer, manufacturer, sizeof(manufacturer));
+    xml_escape(info->model, model, sizeof(model));
+    xml_escape(info->firmware_version, firmware, sizeof(firmware));
+    xml_escape(info->serial_number, serial, sizeof(serial));
+    xml_escape(info->hardware_id, hardware, sizeof(hardware));
+
+    /* 预构建各部分（栈上分配，零堆分配） */
+    char body_part1[2048];
+    int body_part1_len = snprintf(body_part1, sizeof(body_part1),
+        "    <tds:GetDeviceInformationResponse "
+        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
+        "      <tds:Manufacturer>%s</tds:Manufacturer>\n"
+        "      <tds:Model>%s</tds:Model>\n"
+        "      <tds:FirmwareVersion>%s</tds:FirmwareVersion>\n",
+        manufacturer, model, firmware
+    );
+
+    char body_part2[1024];
+    int body_part2_len = snprintf(body_part2, sizeof(body_part2),
+        "      <tds:SerialNumber>%s</tds:SerialNumber>\n"
+        "      <tds:HardwareId>%s</tds:HardwareId>\n"
+        "    </tds:GetDeviceInformationResponse>\n",
+        serial, hardware
+    );
+
+    /* 使用writev聚合发送 */
+    struct iovec iov[5];
+    iov[0].iov_base = (void *)TEMPLATE_SOAP_ENVELOPE_START;
+    iov[0].iov_len  = sizeof(TEMPLATE_SOAP_ENVELOPE_START) - 1;
+    iov[1].iov_base = body_part1;
+    iov[1].iov_len  = body_part1_len;
+    iov[2].iov_base = body_part2;
+    iov[2].iov_len  = body_part2_len;
+    iov[3].iov_base = (void *)TEMPLATE_SOAP_ENVELOPE_END;
+    iov[3].iov_len  = sizeof(TEMPLATE_SOAP_ENVELOPE_END) - 1;
+
+    return send_soap_response_v(client_socket, iov, 4);
+}
+
+/* XML特殊字符转义 */
+static int xml_escape(const char *input, char *output, size_t output_len)
+{
+    size_t j = 0;
+    for (size_t i = 0; input[i] && j < output_len - 1; i++) {
+        switch (input[i]) {
+            case '&':
+                if (j + 5 >= output_len) goto done;
+                memcpy(output + j, "&amp;", 5); j += 5; break;
+            case '<':
+                if (j + 4 >= output_len) goto done;
+                memcpy(output + j, "&lt;", 4); j += 4; break;
+            case '>':
+                if (j + 4 >= output_len) goto done;
+                memcpy(output + j, "&gt;", 4); j += 4; break;
+            case '"':
+                if (j + 6 >= output_len) goto done;
+                memcpy(output + j, "&quot;", 6); j += 6; break;
+            case '\'':
+                if (j + 6 >= output_len) goto done;
+                memcpy(output + j, "&apos;", 6); j += 6; break;
+            default:
+                output[j++] = input[i]; break;
+        }
+    }
+done:
+    output[j] = '\0';
+    return (int)j;
+}
+```
+
+#### WSDL/XSD裁剪策略
+
+ONVIF完整WSDL定义非常庞大，嵌入式设备通常只实现部分服务。通过WSDL裁剪可以减少代码生成量和内存占用。
+
+**gSOAP WSDL裁剪方法**：
+
+```bash
+# 1. 只导入需要的WSDL文件
+wsdl2h -c -o onvif_mini.h \
+    devicemgmt.wsdl \
+    media.wsdl \
+    event.wsdl
+
+# 2. 不导入可选服务（如Search/Recording/Analytics）
+
+# 3. 使用typemap.dat重命名类型，减少符号冲突
+
+# 4. 启用编译优化
+soapcpp2 -c -C -x -I import_dir onvif_mini.h
+```
+
+**手动裁剪XSD类型**：
+
+```c
+/* 如果完全不使用gSOAP，可以手动定义需要的类型 */
+/* 只保留实际使用的字段 */
+
+typedef struct {
+    char token[64];
+    char name[64];
+    /* 省略未使用的字段：UseCount, Fixed等 */
+} onvif_profile_simple_t;
+
+typedef struct {
+    char token[64];
+    char name[64];
+    int  width;
+    int  height;
+    char encoding[8];  /* "H264" / "H265" */
+    int  bitrate;
+    int  frame_rate;
+    int  gov_length;
+} onvif_encoder_simple_t;
+```
+
+#### 与RTSP Server的集成架构
+
+ONVIF Media Service和RTSP Server的集成有两种典型架构：
+
+**架构A：ONVIF协议层调用RTSP层（推荐）**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    集成架构A（推荐）                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────┐      GetStreamUri()      ┌─────────────┐     │
+│   │ ONVIF Media │ ────────────────────────> │  RTSP Server │     │
+│   │  Service    │      返回RTSP URL          │  (Live555/   │     │
+│   │             │ <────────────────────────  │   自研)      │     │
+│   └──────┬──────┘      查询流信息            └──────┬──────┘     │
+│          │                                         │            │
+│          │  SetVideoEncoderConfiguration()         │            │
+│          │ ──────────────────────────────────────> │            │
+│          │      修改编码参数（分辨率/码率/帧率）       │            │
+│          │                                         │            │
+│          └─────────────────────────────────────────┘            │
+│                    共享编码器配置数据库                           │
+│                                                                  │
+│   要点：                                                          │
+│   - ONVIF层和RTSP层共享同一套编码器配置                            │
+│   - ONVIF修改配置后，RTSP层自动生效                                │
+│   - GetStreamUri从RTSP层获取实际URL                                │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**架构B：ONVIF层独立管理URL**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    集成架构B（简单但弱耦合）                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────┐      自行构造URL      ┌─────────────┐         │
+│   │ ONVIF Media │ ──────────────────> │  RTSP Server │         │
+│   │  Service    │  rtsp://ip:port/     │  (独立运行)  │         │
+│   │             │                      │             │         │
+│   └─────────────┘                      └─────────────┘         │
+│                                                                  │
+│   要点：                                                          │
+│   - ONVIF层自己知道RTSP URL格式                                  │
+│   - 编码配置修改需要重启RTSP流                                     │
+│   - 实现简单，但URL和编码配置可能不同步                            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 嵌入式ONVIF测试工具推荐
+
+| 工具名称 | 类型 | 平台 | 功能 | 使用建议 |
+|---------|------|------|------|---------|
+| **ONVIF Device Test Tool** | 官方测试 | Windows | Profile认证测试 | 必备，用于Profile测试 |
+| **ONVIF Device Manager (ODM)** | 免费客户端 | Windows | 设备发现、浏览、配置 | 日常开发调试首选 |
+| **ONVIF Device Tool** | 开源客户端 | Windows | 基础ONVIF操作 | 轻量级替代方案 |
+| **ONVIF CLI** | 命令行 | Linux | 脚本化测试 | CI/CD集成 |
+| **Wireshark** | 协议分析 | 跨平台 | 抓包分析SOAP/XML | 排查通信问题必备 |
+| **Postman/Insomnia** | HTTP客户端 | 跨平台 | 手动发送SOAP请求 | 接口调试 |
+| **SoapUI** | SOAP测试 | 跨平台 | WSDL导入/自动化测试 | gSOAP开发配套 |
+| **ONVIF Device Simulator** | 模拟设备 | Windows | 模拟ONVIF设备行为 | 客户端开发测试 |
+| **GSoap Plugin for wsdd** | 开发库 | Linux | WS-Discovery | 设备发现开发 |
+
+**ONVIF Device Manager使用指南**：
+
+1. **设备发现**：启动后自动执行WS-Discovery，发现局域网内ONVIF设备
+2. **实时预览**：双击设备可查看视频流（通过GetStreamUri获取RTSP URL后播放）
+3. **PTZ控制**：选择PTZ设备后，可通过UI进行方向/变焦控制
+4. **参数配置**：修改视频编码参数、图像参数等
+5. **事件查看**：订阅设备事件并实时显示
+
+**Wireshark抓包过滤表达式**：
+
+```
+# 过滤ONVIF相关流量
+udp.port == 3702        # WS-Discovery
+http.request.method == "POST" and http contains "SOAPAction"  # ONVIF SOAP
+rtsp                    # RTSP流控制
+rtp                     # RTP媒体流
+
+# 导出SOAP消息分析
+# 1. 设置显示过滤器：http.request.method == "POST"
+# 2. 右键Follow -> HTTP Stream
+# 3. 查看完整的请求/响应XML
+```
 
 ---
 
@@ -13572,6 +17871,437 @@ Kernel (ALSA/V4L2/DRM)
 | 资源占用 | 中等 | 较高 | 低 |
 
 **嵌入式Linux趋势**：新系统建议使用PipeWire替代PulseAudio+JACK的组合，但需要评估内核版本要求（Linux 5.x+）。
+
+---
+
+### 6.2.5 FFmpeg在嵌入式中的应用
+
+FFmpeg是嵌入式音视频开发中不可或缺的工具库。阶段四已深入讲解了FFmpeg的编解码API与命令行使用，本节聚焦于**FFmpeg在资源受限的嵌入式环境中的工程实践**——包括裁剪编译、硬件加速集成、内存优化、与系统框架对接等核心话题。
+
+#### 6.2.5.1 嵌入式编译与裁剪
+
+**为什么需要裁剪？**
+
+完整版FFmpeg包含数百个编解码器、复用器、滤镜和协议，编译体积可达数十MB。嵌入式设备通常只有8MB~128MB可用存储，必须进行精细化裁剪。
+
+**configure裁剪关键选项**：
+
+| 配置类别 | 关键选项 | 说明 |
+|---------|---------|------|
+| **禁用全部** | `--disable-everything` | 先关闭所有组件，再按需开启 |
+| **启用编码器** | `--enable-encoder=h264_nvenc,hevc_nvenc,aac,opus` | 仅保留需要的编码器 |
+| **启用解码器** | `--enable-decoder=h264,hevc,aac,opus,mp3` | 仅保留需要的解码器 |
+| **启用封装** | `--enable-muxer=flv,mp4,mpegts,rtsp` | 仅保留需要的容器格式 |
+| **启用解封装** | `--enable-demuxer=flv,mov,mpegts,rtsp` | 仅保留需要的解封装器 |
+| **启用协议** | `--enable-protocol=file,rtp,rtmp,http,tcp,udp` | 网络协议白名单 |
+| **禁用调试** | `--disable-debug` | 移除调试符号，减小体积 |
+| **优化尺寸** | `--enable-small` | 以速度换体积的优化 |
+| **静态编译** | `--enable-static --disable-shared` | 单文件部署，无依赖 |
+
+**典型嵌入式裁剪配置示例**（以RTSP IPCamera为例）：
+
+```bash
+./configure \
+  --prefix=/opt/ffmpeg-arm \
+  --cross-prefix=arm-linux-gnueabihf- \
+  --arch=arm --target-os=linux \
+  --disable-everything \
+  --enable-encoder=h264_rkmpp,hevc_rkmpp,aac \
+  --enable-decoder=h264_rkmpp,hevc_rkmpp,aac,opus \
+  --enable-muxer=mp4,mpegts,flv \
+  --enable-demuxer=mp4,mpegts,flv,avi \
+  --enable-protocol=file,rtp,rtsp,http,tcp,udp,rtmp \
+  --enable-parser=h264,hevc,aac \
+  --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb,aac_adtstoasc \
+  --enable-filter=scale,transpose,overlay,format \
+  --enable-ffplay=no --enable-ffprobe=yes \
+  --enable-libopus \
+  --disable-debug --enable-small \
+  --enable-stripping \
+  --enable-cross-compile
+
+make -j$(nproc)
+make install
+```
+
+**裁剪效果对比**：
+
+| 配置 | 静态库体积 | 可执行文件体积 | 适用场景 |
+|------|-----------|--------------|---------|
+| 完整版（全部启用） | ~35MB | ~25MB | 开发调试、PC服务器 |
+| 精简版（常用编解码） | ~8MB | ~5MB | 通用嵌入式设备 |
+| 超精简版（单功能） | ~2MB | ~1.5MB | 极低资源设备（MCU级Linux） |
+| 仅推流版 | ~3MB | ~1.8MB | 仅RTMP/RTSP推流 |
+
+**链接优化技巧**：
+- 使用 `-Wl,--gc-sections -ffunction-sections -fdata-sections` 去除未使用函数
+- 使用 `strip --strip-all` 移除符号表
+- 使用 `sstrip` 进一步压缩（需单独安装）
+
+#### 6.2.5.2 嵌入式硬件加速集成
+
+FFmpeg支持多种硬件加速框架，嵌入式平台需根据芯片选型匹配合适的硬件加速方案。
+
+**Linux平台硬件加速路径**：
+
+```
+FFmpeg API
+    |
+    +---> VAAPI (Video Acceleration API) ----> Intel/AMD显卡
+    |
+    +---> VDPAU (Video Decode Presentation) ---> NVIDIA显卡（嵌入式较少）
+    |
+    +---> DRM/DRI (Direct Rendering) ---------> 部分ARM Mali GPU
+    |
+    +---> OMX (OpenMAX IL) -------------------> 传统嵌入式平台（已逐渐被替代）
+    |
+    +---> V4L2 M2M (Memory-to-Memory) --------> 新一代Linux嵌入式VPU
+    |
+    +---> 厂商私有API (MPP/RGA/CedarX) -----> Rockchip/Allwinner等
+```
+
+**Rockchip MPP（Media Process Platform）集成**：
+
+Rockchip芯片（RV1106/RV1126/RK3588等）通过MPP库提供硬件编解码能力，FFmpeg可通过自定义codec对接。
+
+```c
+// FFmpeg编码器配置：使用Rockchip硬件加速
+AVCodecContext *enc_ctx = avcodec_alloc_context3(NULL);
+enc_ctx->codec_id = AV_CODEC_ID_H264;
+enc_ctx->width = 1920;
+enc_ctx->height = 1080;
+enc_ctx->pix_fmt = AV_PIX_FMT_DRM_PRIME;  // DRM零拷贝格式
+enc_ctx->bit_rate = 4 * 1024 * 1024;
+
+// 指定使用rkmpp编码器
+AVCodec *codec = avcodec_find_encoder_by_name("h264_rkmpp");
+if (!codec) {
+    // 回退到软件编码
+    codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+}
+
+avcodec_open2(enc_ctx, codec, NULL);
+```
+
+**V4L2 M2M（Memory-to-Memory）框架**：
+
+Linux内核的V4L2 M2M子系统为硬件编解码器提供了统一接口，FFmpeg 4.x+已内置支持。
+
+```bash
+# 查看设备支持的V4L2 M2M编解码器
+v4l2-ctl -d /dev/video0 --list-formats-ext
+v4l2-ctl -d /dev/video1 --list-formats-ext  # 通常是编码设备
+
+# FFmpeg使用V4L2 M2M硬件编码
+ffmpeg -f v4l2 -input_format nv12 -video_size 1920x1080 -i /dev/video0 \
+       -c:v h264_v4l2m2m -b:v 4M -f rtsp rtsp://localhost/live/stream
+```
+
+**硬件加速选择决策**：
+
+| 平台 | 推荐加速方案 | FFmpeg编码器名称 | 注意事项 |
+|------|------------|-----------------|---------|
+| Rockchip RV1126/RK3588 | MPP | `h264_rkmpp` / `hevc_rkmpp` | 需librkmpp补丁 |
+| Allwinner H3/H5/H6 | CedarX | `h264_cedarc` | 社区维护，稳定性一般 |
+| Amlogic S905/S922 | 硬件解码 | `h264_aml` | 需Amlogic内核驱动 |
+| NXP i.MX6/7/8 | VPU | `h264_v4l2m2m` | 官方BSP支持完善 |
+| 通用ARM Linux | V4L2 M2M | `h264_v4l2m2m` | 需内核支持V4L2 M2M |
+| Intel x86嵌入式 | VAAPI | `h264_vaapi` | 仅Intel平台 |
+| NVIDIA Jetson | NVDEC/NVENC | `h264_nvenc` / `h264_nvdec` | 需CUDA驱动 |
+
+**嵌入式硬件加速关键注意事项**：
+
+1. **内存格式对齐**：硬件编解码器通常要求特定的像素格式和stride对齐（如16字节或32字节对齐）。FFmpeg的`av_hwframe_transfer_data()`可处理格式转换，但会引入额外拷贝开销。
+
+2. **DRM PRIME零拷贝**：
+```c
+// 配置DRM PRIME零拷贝缓冲区
+AVBufferRef *hw_device_ctx = NULL;
+av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", NULL, 0);
+enc_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+```
+
+3. **编码器能力查询**：嵌入式硬件编码器支持的能力集有限，使用前务必查询。
+```c
+const AVCodecHWConfig *config = avcodec_get_hw_config(codec, 0);
+if (config && config->device_type == AV_HWDEVICE_TYPE_DRM) {
+    // 支持DRM零拷贝
+}
+```
+
+#### 6.2.5.3 内存优化与零拷贝
+
+嵌入式设备内存资源紧张（256MB~2GB典型），FFmpeg使用中的内存优化至关重要。
+
+**内存占用热点分析**：
+
+| 组件 | 典型内存占用 | 优化方向 |
+|------|------------|---------|
+| 原始视频帧（1080p NV12） | ~3MB/帧 | 减少缓冲队列深度 |
+| 解码器内部缓冲 | ~10-50MB | 选择低延迟解码模式 |
+| 编码器参考帧缓冲 | ~20-100MB | 限制B帧数量 |
+| 滤镜图（Filtergraph） | ~5-20MB | 避免复杂滤镜链 |
+| 网络缓冲区 | ~2-10MB | 根据带宽调整 |
+
+**减少缓冲区深度**：
+
+```c
+// 控制解码器内部缓冲（以低延迟换取内存）
+av_opt_set_int(dec_ctx->priv_data, "threads", 1, 0);        // 单线程解码省内存
+av_opt_set_int(dec_ctx->priv_data, "refcounted_frames", 1, 0);
+
+// 编码器：限制lookahead和B帧
+av_opt_set_int(enc_ctx->priv_data, "bframes", 0, 0);         // 关闭B帧
+av_opt_set_int(enc_ctx->priv_data, "rc_lookahead", 0, 0);  // 关闭lookahead
+```
+
+**自定义内存分配器**：
+
+```c
+// 替换FFmpeg默认内存分配器，接入设备内存池
+static void *embedded_malloc(size_t size) {
+    return mempool_alloc(size);  // 使用设备自定义内存池
+}
+
+static void embedded_free(void *ptr) {
+    mempool_free(ptr);
+}
+
+// 在初始化时替换
+av_malloc = embedded_malloc;
+av_free = embedded_free;
+```
+
+**零拷贝Pipeline设计**：
+
+```
+┌──────────┐    DMA    ┌──────────┐   DMABUF   ┌──────────┐   DMA    ┌──────────┐
+│  Camera  │ ────────► │   ISP    │ ─────────► │  VPU ENC │ ───────► │  Network │
+│  (Sensor)│           │ (V4L2)   │            │(DRM PRIME)│          │  (RTP)   │
+└──────────┘           └──────────┘            └──────────┘          └──────────┘
+   物理内存              dmabuf fd              硬件surf              物理内存
+```
+
+```c
+// 从V4L2获取dmabuf fd，直接送入编码器
+struct v4l2_buffer buf = {0};
+buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+buf.memory = V4L2_MEMORY_DMABUF;
+ioctl(v4l2_fd, VIDIOC_DQBUF, &buf);  // buf.m.fd 即为dmabuf fd
+
+// FFmpeg使用dmabuf封装为AVFrame（需自定义hwctx）
+AVFrame *frame = av_frame_alloc();
+frame->format = AV_PIX_FMT_DRM_PRIME;
+frame->width = 1920;
+frame->height = 1080;
+// 将dmabuf fd关联到frame的hwctx...
+
+avcodec_send_frame(enc_ctx, frame);  // 零拷贝编码
+```
+
+#### 6.2.5.4 实时处理与低延迟优化
+
+嵌入式实时音视频场景（对讲、直播、图传）对延迟极度敏感。
+
+**FFmpeg低延迟配置参数**：
+
+| 参数 | 默认值 | 推荐值 | 作用 |
+|------|--------|--------|------|
+| `-fflags nobuffer` | - | 启用 | 禁用输入缓冲 |
+| `-flags low_delay` | - | 启用 | 低延迟标志 |
+| `-strict experimental` | - | 按需 | 启用实验性低延迟特性 |
+| `-threads 1` | auto | 1 | 减少线程切换开销 |
+| `-probesize 32` | 5M | 32-512 | 减少流探测时间 |
+| `-analyzeduration 0` | 5M | 0 | 禁用流分析延迟 |
+| `-sync ext` | audio | ext | 外部时钟同步 |
+| `-max_delay 0` | - | 0 | 消除最大缓冲延迟 |
+
+**低延迟推流命令示例**：
+
+```bash
+# 从V4L2摄像头实时采集，硬件编码，RTMP低延迟推流
+ffmpeg -f v4l2 -input_format nv12 -video_size 1280x720 -framerate 30 \
+       -i /dev/video0 \
+       -fflags nobuffer -flags low_delay \
+       -c:v h264_v4l2m2m -b:v 2M -g 30 -bf 0 \
+       -c:a copy \
+       -f flv -flvflags no_duration_filesize \
+       rtmp://server/live/stream
+```
+
+**编码器低延迟模式**：
+
+```c
+// x264/x265软件编码低延迟配置（备用方案）
+av_dict_set(&opts, "preset", "ultrafast", 0);
+av_dict_set(&opts, "tune", "zerolatency", 0);
+av_dict_set(&opts, "profile", "baseline", 0);  // 无B帧
+av_dict_set(&opts, "x264opts", "rc-lookahead=0:ref=1", 0);
+
+// 硬件编码器低延迟
+av_opt_set_int(enc_ctx->priv_data, "zerolatency", 1, 0);  // 部分硬件支持
+```
+
+#### 6.2.5.5 与Linux音视频子系统集成
+
+FFmpeg作为应用层库，需要与Linux底层子系统（ALSA/V4L2/DRM）无缝协作。
+
+**FFmpeg + ALSA音频采集/播放**：
+
+```c
+// 音频采集（ALSA输入设备）
+AVFormatContext *fmt_ctx = NULL;
+avformat_open_input(&fmt_ctx, "hw:0,0", av_find_input_format("alsa"), NULL);
+
+// 或指定采样率和格式
+AVDictionary *opts = NULL;
+av_dict_set(&opts, "sample_rate", "48000", 0);
+av_dict_set(&opts, "channels", "2", 0);
+avformat_open_input(&fmt_ctx, "default", av_find_input_format("alsa"), &opts);
+```
+
+```bash
+# FFmpeg ALSA命令行示例
+# 采集并编码AAC推流
+ffmpeg -f alsa -ac 2 -ar 48000 -i hw:0,0 -c:a aac -b:a 128k -f flv rtmp://server/live/audio
+
+# 播放解码后的音频
+ffmpeg -i input.mp4 -f alsa hw:0,0
+```
+
+**FFmpeg + V4L2视频采集**：
+
+```bash
+# 基础V4L2采集
+ffmpeg -f v4l2 -i /dev/video0 -c:v copy output.yuv
+
+# 指定格式和分辨率
+ffmpeg -f v4l2 -input_format nv12 -video_size 1920x1080 -framerate 30 \
+       -i /dev/video0 -c:v h264_v4l2m2m -b:v 4M output.mp4
+
+# 多路摄像头（通过设备索引）
+ffmpeg -f v4l2 -i /dev/video0 -f v4l2 -i /dev/video2 \
+       -filter_complex "[0:v][1:v]hstack" -c:v h264 output.mp4
+```
+
+**FFmpeg + DRM显示输出**：
+
+```c
+// 使用FFmpeg的DRM输出设备（需重新编译启用--enable-libdrm）
+// 将解码后的视频直接写入DRM framebuffer
+
+AVFormatContext *out_ctx = NULL;
+avformat_alloc_output_context2(&out_ctx, NULL, "drm", "/dev/dri/card0");
+
+AVStream *stream = avformat_new_stream(out_ctx, NULL);
+stream->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+stream->codecpar->codec_id = AV_CODEC_ID_RAWVIDEO;
+stream->codecpar->format = AV_PIX_FMT_DRM_PRIME;
+stream->codecpar->width = 1920;
+stream->codecpar->height = 1080;
+```
+
+#### 6.2.5.6 嵌入式常用场景模式
+
+**场景一：IPC摄像头推流**（采集→编码→推流）
+
+```c
+// 简化版Pipeline架构
+/*
+ *  [V4L2 Capture] ──► [SW/HW Scale] ──► [HW ENC H.264] ──► [RTSP Server]
+ *       │                  │                   │                  │
+ *       ▼                  ▼                   ▼                  ▼
+ *   NV12/YUV420      分辨率适配         码率控制CBR        RTP打包发送
+ */
+
+// 核心循环
+while (running) {
+    // 1. 从V4L2获取帧（DMABUF零拷贝）
+    AVFrame *raw_frame = v4l2_get_frame_dmabuf(v4l2_ctx);
+    
+    // 2. 送入硬件编码器
+    avcodec_send_frame(enc_ctx, raw_frame);
+    
+    // 3. 接收编码后的packet
+    AVPacket *pkt = av_packet_alloc();
+    while (avcodec_receive_packet(enc_ctx, pkt) == 0) {
+        // 4. RTP打包并发送
+        rtp_send_packet(rtp_ctx, pkt->data, pkt->size, pkt->pts);
+        av_packet_unref(pkt);
+    }
+    
+    av_frame_unref(raw_frame);
+}
+```
+
+**场景二：NVR拉流录制**（多路拉流→存储）
+
+```bash
+# 多路RTSP拉流同时录制（嵌入式NVR典型场景）
+# 使用FFmpeg的tee复用器实现一路输入多路输出
+
+ffmpeg -i rtsp://camera1/stream \
+       -c copy -f segment -segment_time 600 -segment_format mp4 \
+       -strftime 1 "/mnt/sdcard/cam1/%Y%m%d_%H%M%S.mp4" \
+       -c copy -f flv rtmp://backup-server/live/cam1
+
+# 4路同时录制脚本示例（后台运行）
+for i in 1 2 3 4; do
+  ffmpeg -i rtsp://192.168.1.10${i}/stream \
+         -c copy -f segment -segment_time 300 \
+         "/mnt/disk/cam${i}/%Y%m%d_%H%M%S.mp4" &
+done
+```
+
+**场景三：转码网关**（协议转换/格式转换）
+
+```bash
+# RTSP转RTMP（协议网关）
+ffmpeg -rtsp_transport tcp -i rtsp://ipc/stream \
+       -c:v copy -c:a copy -f flv rtmp://cdn/live/stream
+
+# H.265转H.264（降低解码端要求）
+ffmpeg -rtsp_transport tcp -i rtsp://ipc/stream \
+       -c:v h264_v4l2m2m -b:v 4M \
+       -c:a copy \
+       -f flv rtmp://cdn/live/stream
+
+# 添加时间戳OSD叠加
+ffmpeg -i rtsp://ipc/stream \
+       -vf "drawtext=fontfile=/usr/share/fonts/truetype/droid.ttf: \
+            text='%{localtime\:%Y-%m-%d %H\\:%M\\:%S}': \
+            fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5:x=10:y=10" \
+       -c:v h264_v4l2m2m -c:a copy -f rtsp rtmp://server/live/osd
+```
+
+#### 6.2.5.7 故障排查与调试技巧
+
+**嵌入式FFmpeg常见问题**：
+
+| 现象 | 可能原因 | 排查方法 |
+|------|---------|---------|
+| `Cannot open video device` | V4L2设备被占用或权限不足 | `lsof /dev/video0`; 检查udev规则 |
+| `Failed to create encoder` | 硬件编码器未初始化 | 检查内核驱动加载：`dmesg \| grep -i vpu` |
+| 编码输出绿屏/花屏 | 像素格式不匹配或stride对齐错误 | 确认`pix_fmt`与硬件要求一致 |
+| 内存持续增长最终OOM | 未正确调用`av_packet_unref`/`av_frame_unref` | Valgrind或自定义内存统计 |
+| 编码延迟累积 | 编码器缓冲未配置低延迟模式 | 检查`zerolatency`和`bframes`参数 |
+| 音频视频不同步 | 时钟基准不一致或PTS计算错误 | 使用`-vsync cfr`固定帧率输出 |
+
+**嵌入式调试专用日志**：
+
+```bash
+# 开启FFmpeg详细日志
+ffmpeg -loglevel debug -report ...
+
+# 查看V4L2设备能力
+v4l2-ctl -d /dev/video0 -D
+v4l2-ctl -d /dev/video0 --list-formats-ext
+v4l2-ctl -d /dev/video0 --list-ctrls
+
+# 实时监控编码器状态（通过sysfs）
+cat /sys/kernel/debug/mpp/videoenc/status
+cat /sys/class/vpu/vpu0/load
+```
 
 ---
 
@@ -15334,16 +20064,16 @@ IPCamera（网络摄像机）是嵌入式音视频领域最典型、最成熟的
 
 #### 主控芯片选型
 
-| 芯片系列        | 厂商  | 编码能力            | AI算力     | 适用场景       | 开发难度  |
-| ----------- | --- | --------------- | -------- | ---------- | ----- |
-| Hi3516DV300 | 海思  | 4MP@30fps H.265 | 1T OPS   | 中端IPC、人脸抓拍 | ★★★☆☆ |
-| Hi3519AV100 | 海思  | 8MP@30fps H.265 | 2T OPS   | 高端IPC、AI分析 | ★★★★☆ |
-| Hi3559AV100 | 海思  | 8K@15fps H.265  | 4T OPS   | 全景、多目拼接    | ★★★★★ |
-| RV1126      | 瑞芯微 | 4MP@30fps H.265 | 2T OPS   | 中端IPC、AI视觉 | ★★★☆☆ |
-| RV1106      | 瑞芯微 | 3MP@25fps H.265 | 0.5T OPS | 经济型IPC、门铃  | ★★☆☆☆ |
-| SSC338Q     | 星宸  | 5MP@30fps H.265 | 0.5T OPS | 高性价比IPC    | ★★☆☆☆ |
-| SSC30KQ     | 星宸  | 8MP@30fps H.265 | 1T OPS   | AI IPC     | ★★★☆☆ |
-| T31         | 君正  | 3MP@20fps H.265 | -        | 低功耗电池IPC   | ★★☆☆☆ |
+| 芯片系列 | 厂商 | 编码能力 | AI算力 | 适用场景 | 开发难度 |
+|---------|------|---------|--------|---------|---------|
+| Hi3516DV300 | 海思 | 4MP@30fps H.265 | 1T OPS | 中端IPC、人脸抓拍 | ★★★☆☆ |
+| Hi3519AV100 | 海思 | 8MP@30fps H.265 | 2T OPS | 高端IPC、AI分析 | ★★★★☆ |
+| Hi3559AV100 | 海思 | 8K@15fps H.265 | 4T OPS | 全景、多目拼接 | ★★★★★ |
+| RV1126 | 瑞芯微 | 4MP@30fps H.265 | 2T OPS | 中端IPC、AI视觉 | ★★★☆☆ |
+| RV1106 | 瑞芯微 | 3MP@25fps H.265 | 0.5T OPS | 经济型IPC、门铃 | ★★☆☆☆ |
+| SSC338Q | 星宸 | 5MP@30fps H.265 | 0.5T OPS | 高性价比IPC | ★★☆☆☆ |
+| SSC30KQ | 星宸 | 8MP@30fps H.265 | 1T OPS | AI IPC | ★★★☆☆ |
+| T31 | 君正 | 3MP@20fps H.265 | - | 低功耗电池IPC | ★★☆☆☆ |
 
 **选型关键考量**：
 

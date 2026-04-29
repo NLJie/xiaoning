@@ -74,7 +74,7 @@
               "type": "markdown",
               "state": {
                 "file": "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/MIPI CSI-2 规范深度分析.md",
-                "mode": "source",
+                "mode": "preview",
                 "source": false,
                 "backlinks": true,
                 "backlinkOpts": {
@@ -278,7 +278,7 @@
             }
           }
         ],
-        "currentTab": 6
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -305,12 +305,12 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "89c1f73775841dee",
+  "active": "6219274d9b3fc610",
   "lastOpenFiles": [
-    "1. 项目/兆晟_D6P/一、项目基础信息.md",
-    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/MIPI CSI-2 规范深度分析.md",
-    "2. 领域/嵌入式Linux内核开发/嵌入式Linux内核开发.README.md",
     "2. 领域/嵌入式Linux内核开发/RK-Docs/Common/DDR/Rockchip_Developer_Guide_DDR_CN.pdf",
+    "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/MIPI CSI-2 规范深度分析.md",
+    "1. 项目/兆晟_D6P/一、项目基础信息.md",
+    "2. 领域/嵌入式Linux内核开发/嵌入式Linux内核开发.README.md",
     "2. 领域/嵌入式操作系统开发/嵌入式操作系统开发.README.md",
     "2. 领域/嵌入式应用开发/3. 嵌入式音视频开发/5. 嵌入式音视频开发/交叉编译第三方库.md",
     "2. 领域/嵌入式应用开发/嵌入式应用开发.README.md",
@@ -342,7 +342,6 @@
     "2. 领域/嵌入式Linux内核开发/cn/Common/NPU/rknpu2/rknn_server_proxy.md",
     "2. 领域/嵌入式Linux内核开发/cn/Common/NPU/rknpu2/RKNNToolKit2_OP_Support-2.3.2.md",
     "2. 领域/嵌入式Linux内核开发/cn/Common/NPU/rknpu2/RKNNToolKit2_API_Difference_With_Toolkit1-2.3.2.md",
-    "2. 领域/嵌入式Linux内核开发/cn/RV1126B/RV1126B_Linux6.1_SDK_Note.md",
     "-1. 捕获/resource/Pasted image 20260427201522.png",
     "Untitled Diagram.svg",
     "Untitled Diagram 1.svg",
